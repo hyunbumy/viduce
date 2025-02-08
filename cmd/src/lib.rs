@@ -14,10 +14,10 @@ impl FfmpegWrapper {
     }
 
     pub fn execute(&self, command: FfmpegCommand) -> Result<(), FfmpegError> {
-        let args = format!("-i {} {}", command.input, command.output);
-
         let output = Command::new("ffmpeg")
-            .arg(args)
+            .arg("-i")
+            .arg(command.input)
+            .arg(command.output)
             .output()
             .map_err(FfmpegError::from_io_error)?;
 

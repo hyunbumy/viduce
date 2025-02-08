@@ -1,5 +1,4 @@
-use std::io::{self, Write};
-use std::process::Command;
+use std::io::{self};
 use cmd::{FfmpegWrapper, FfmpegCommand};
 
 // TODO(hyunbumy): Figure out how we would package ffmpeg binary
