@@ -1,5 +1,5 @@
+use cmd::{FfmpegCommand, FfmpegWrapper, Resolution};
 use std::io::{self};
-use cmd::{FfmpegWrapper, FfmpegCommand};
 
 // TODO(hyunbumy): Figure out how we would package ffmpeg binary
 fn main() {
@@ -19,7 +19,9 @@ fn main() {
         io::stdin().read_line(&mut output).unwrap();
         let output = output.trim_end();
 
-        let cmd = FfmpegCommand::new(input, output);
+        let mut cmd = FfmpegCommand::new(input, output);
+        cmd.set_fps(1);
+        cmd.set_resolution(Resolution::R480P);
         if let Err(e) = ffmpeg.execute(cmd) {
             println!("Error executing ffmpeg command: {}", e.msg);
         }

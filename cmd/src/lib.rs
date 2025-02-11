@@ -14,10 +14,24 @@ impl FfmpegWrapper {
     }
 
     pub fn execute(&self, command: FfmpegCommand) -> Result<(), FfmpegError> {
-        let output = Command::new("ffmpeg")
+        let mut ffmpeg_cmd = Command::new("ffmpeg");
+        ffmpeg_cmd
+            .arg("-y")
             .arg("-i")
-            .arg(command.input)
-            .arg(command.output)
+            .arg(format!("assets/input/{}",command.input));
+
+        if let Some(res) = command.resolution {
+            ffmpeg_cmd.arg("-vf");
+            ffmpeg_cmd.arg(format!("scale=-2:{}", res as i32));
+        }
+
+        if let Some(fps) = command.fps {
+            ffmpeg_cmd.arg("-r");
+            ffmpeg_cmd.arg(format!("{}", fps as i32));
+        }
+
+        let output = ffmpeg_cmd
+            .arg(format!("assets/output/{}",command.output))
             .output()
             .map_err(FfmpegError::from_io_error)?;
 
@@ -42,6 +56,16 @@ impl FfmpegWrapper {
 pub struct FfmpegCommand {
     input: String,
     output: String,
+    resolution: Option<Resolution>,
+    fps: Option<u32>,
+}
+
+pub enum Resolution {
+    R1080P = 1080,
+    R720P = 720,
+    R480P = 480,
+    R240P = 240,
+    R144P = 144,
 }
 
 impl FfmpegCommand {
@@ -49,7 +73,21 @@ impl FfmpegCommand {
         FfmpegCommand {
             input: String::from(input),
             output: String::from(output),
+            resolution: None,
+            fps: None,
         }
+    }
+
+    // Set the target resolution of the output video
+    pub fn set_resolution(&mut self, res: Resolution) -> &Self {
+        self.resolution = Some(res);
+        self
+    }
+
+    // set the target fps of the output video
+    pub fn set_fps(&mut self, fps: u32) -> &Self {
+        self.fps = Some(fps);
+        self
     }
 }
 
