@@ -1,9 +1,15 @@
+mod command_runner;
 mod ffmpeg;
 
-use ffmpeg::ffmpeg_command::FfmpegCommand;
-use ffmpeg::ffmpeg_command::Resolution;
-use ffmpeg::ffmpeg_wrapper::FfmpegWrapper;
-use std::io;
+use command_runner::CommandRunner;
+use ffmpeg::FfmpegCommand;
+use ffmpeg::FfmpegWrapper;
+use ffmpeg::Resolution;
+use std::io::Write;
+use std::{
+    io::{self, Result},
+    process::Command,
+};
 
 pub struct FfmpegRunner {}
 
@@ -13,7 +19,7 @@ impl FfmpegRunner {
     }
 
     pub fn run(&self) {
-        let ffmpeg = FfmpegWrapper::new();
+        let mut ffmpeg = FfmpegWrapper::new(Box::new(DefaultRunner::new()));
 
         // TODO(hyunbumy): Add graceful exit;
         loop {
@@ -40,5 +46,35 @@ impl FfmpegRunner {
             println!("=====================");
             println!("\n");
         }
+    }
+}
+
+struct DefaultRunner {}
+
+impl DefaultRunner {
+    fn new() -> DefaultRunner {
+        DefaultRunner {}
+    }
+}
+
+impl CommandRunner for DefaultRunner {
+    fn run(&mut self, program: &str, args: &[String]) -> Result<()> {
+        let output = Command::new(program).args(args).output()?;
+
+        // TODO: Log this explicitly instead of stdout
+        io::stdout().write_all(&output.stdout)?;
+        io::stderr().write_all(&output.stderr)?;
+
+        if !output.status.success() {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!(
+                    "Failed to execute with status {}",
+                    output.status.to_string()
+                ),
+            ));
+        }
+
+        Ok(())
     }
 }

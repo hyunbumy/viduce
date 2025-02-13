@@ -1,3 +1,5 @@
-pub mod ffmpeg_wrapper;
+mod ffmpeg_wrapper;
+pub use self::ffmpeg_wrapper::{*};
 
-pub mod ffmpeg_command;
+mod ffmpeg_command;
+pub use self::ffmpeg_command::{*};

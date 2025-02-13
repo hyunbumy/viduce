@@ -14,6 +14,7 @@ pub struct FfmpegCommand {
 }
 
 impl FfmpegCommand {
+    // TODO: Add validation
     pub fn new(input: &str, output: &str) -> FfmpegCommand {
         FfmpegCommand {
             input: String::from(input),
