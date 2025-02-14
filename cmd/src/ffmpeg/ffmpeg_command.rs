@@ -6,6 +6,17 @@ pub enum Resolution {
     R144P = 144,
 }
 
+pub fn parse_to_resolution(input: &str) -> Option<Resolution> {
+    match input.to_uppercase().as_str() {
+        "1080P" => Some(Resolution::R1080P),
+        "720P" => Some(Resolution::R720P),
+        "480P" => Some(Resolution::R480P),
+        "240P" => Some(Resolution::R240P),
+        "144P" => Some(Resolution::R144P),
+        _ => None,
+    }
+}
+
 pub struct FfmpegCommand {
     pub input: String,
     pub output: String,
