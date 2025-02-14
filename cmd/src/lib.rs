@@ -19,7 +19,8 @@ impl FfmpegRunner {
     }
 
     pub fn run(&self) {
-        let mut ffmpeg = FfmpegWrapper::new(Box::new(DefaultRunner::new()));
+        let mut runner = DefaultRunner::new();
+        let mut ffmpeg = FfmpegWrapper::new(Box::new(&mut runner));
 
         // TODO(hyunbumy): Add graceful exit;
         loop {
@@ -35,7 +36,14 @@ impl FfmpegRunner {
             io::stdin().read_line(&mut output).unwrap();
             let output = output.trim_end();
 
-            let mut cmd = FfmpegCommand::new(input, output);
+            let mut cmd = match FfmpegCommand::new(input, output) {
+                Ok(cmd) => cmd,
+                Err(e) => {
+                    println!("{e}");
+                    continue;
+                }
+            };
+
             cmd.set_fps(1);
             cmd.set_resolution(Resolution::R480P);
             if let Err(e) = ffmpeg.execute(cmd) {

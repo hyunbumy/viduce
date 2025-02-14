@@ -14,14 +14,21 @@ pub struct FfmpegCommand {
 }
 
 impl FfmpegCommand {
-    // TODO: Add validation
-    pub fn new(input: &str, output: &str) -> FfmpegCommand {
-        FfmpegCommand {
+    pub fn new(input: &str, output: &str) -> Result<FfmpegCommand, String> {
+        if input.is_empty() {
+            return Err(String::from("Missing input"));
+        }
+
+        if output.is_empty() {
+            return Err(String::from("Missing output"));
+        }
+
+        Ok(FfmpegCommand {
             input: String::from(input),
             output: String::from(output),
             resolution: None,
             fps: None,
-        }
+        })
     }
 
     // Set the target resolution of the output video
@@ -37,3 +44,27 @@ impl FfmpegCommand {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn execute_without_input_fails() {
+        let input = "";
+        let output = "output.mp4";
+
+        let result = FfmpegCommand::new(input, output);
+
+        assert!(result.is_err_and(|e| e.contains("Missing input")));
+    }
+
+    #[test]
+    fn execute_without_output_fails() {
+        let input = "input.mp4";
+        let output = "";
+
+        let result = FfmpegCommand::new(input, output);
+
+        assert!(result.is_err_and(|e| e.contains("Missing output")));
+    }
+}
