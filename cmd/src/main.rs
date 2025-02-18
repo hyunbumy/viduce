@@ -1,7 +1,16 @@
-use cmd::FfmpegRunner;
+use cmd::ffmpeg::FfmpegRunner;
+use std::env;
 
 // TODO(hyunbumy): Figure out how we would package ffmpeg binary
 fn main() {
-    let runner = FfmpegRunner::new();
-    runner.run();
+    let args: Vec<String> = env::args().collect();
+    if args.len() != 2 {
+        println!("Invalid arguments");
+    }
+
+    let option = &args[1];
+    match option.as_str() {
+        "ffmpeg" => FfmpegRunner::new().run(),
+        _ => println!("Unknown option {option}")
+    }
 }
