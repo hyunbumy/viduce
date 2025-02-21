@@ -3,6 +3,8 @@ use reqwest::blocking::Client;
 use reqwest::{header::HeaderMap, StatusCode};
 use std::collections::HashMap;
 
+const API_ENDPOINT: &str = "/v1/esrgan-video-upscale";
+
 pub struct SegmindUpscaler<'a> {
     api_host: &'a str,
     api_key: &'a str,
@@ -29,7 +31,7 @@ impl<'a> Upscaler for SegmindUpscaler<'a> {
         ]);
 
         let res = client
-            .post(self.api_host)
+            .post(format!("{}{}", self.api_host, API_ENDPOINT))
             .headers(headers)
             .json(&body)
             .send()
@@ -42,5 +44,57 @@ impl<'a> Upscaler for SegmindUpscaler<'a> {
         res.bytes()
             .map(|bytes| bytes.to_vec())
             .map_err(|error| error.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn upscale_success_returns_upscaled_bytes() {
+        let mut server = mockito::Server::new();
+        let url = server.url();
+        let mut upscaler = SegmindUpscaler::new(&url, "test_key");
+
+        let mock = server
+            .mock("POST", "/v1/esrgan-video-upscale")
+            .match_header("x-api-key", "test_key")
+            .match_body(mockito::Matcher::PartialJsonString(
+                r#"{
+                  "crop_to_fit": "False",
+                  "input_video": "input_video.mp4",
+                  "res_model": "RealESRGAN_x4plus",
+                  "resolution": "FHD"
+                }"#
+                .to_string(),
+            ))
+            .with_status(200)
+            .with_body("1234")
+            .create();
+
+        let result = upscaler.upscale("input_video.mp4");
+
+        mock.assert();
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "1234".as_bytes());
+    }
+
+    #[test]
+    fn upscale_fail_returns_error() {
+        let mut server = mockito::Server::new();
+        let url = server.url();
+        let mut upscaler = SegmindUpscaler::new(&url, "test_key");
+
+        let mock = server
+            .mock("POST", "/v1/esrgan-video-upscale")
+            .with_status(400)
+            .create();
+
+        let result = upscaler.upscale("input_video.mp4");
+
+        mock.assert();
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Request error 400 Bad Request");
     }
 }
