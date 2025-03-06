@@ -1,5 +1,5 @@
-use ffmpeg::FfmpegCommand;
-use ffmpeg::FfmpegWrapper;
+use ffmpeg::wrapper::command::FfmpegCommand;
+use ffmpeg::wrapper::FfmpegWrapper;
 use ffmpeg::CommandRunner;
 use std::{io, io::Write, process::Command};
 
@@ -38,9 +38,9 @@ impl FfmpegRunner {
                 cmd.set_fps(fps);
             }
 
-            if let Some(resolution) =
-                ffmpeg::parse_to_resolution(&Self::get_user_input("Specify resolution:"))
-            {
+            if let Some(resolution) = ffmpeg::wrapper::command::parse_to_resolution(
+                &Self::get_user_input("Specify resolution:"),
+            ) {
                 cmd.set_resolution(resolution);
             }
 
