@@ -1,9 +1,10 @@
 use crate::upscaler::Upscaler;
 use reqwest::blocking::Client;
-use reqwest::{header::HeaderMap, StatusCode};
+use reqwest::header::HeaderMap;
 use std::collections::HashMap;
+use std::error::Error;
 
-const API_ENDPOINT: &str = "/v1/esrgan-video-upscale";
+const API_ENDPOINT: &str = "/v1/esrgan-video-upscaler";
 
 pub struct SegmindUpscaler<'a> {
     api_host: &'a str,
@@ -17,7 +18,7 @@ impl<'a> SegmindUpscaler<'a> {
 }
 
 impl<'a> Upscaler for SegmindUpscaler<'a> {
-    fn upscale(&mut self, uri: &str) -> Result<Vec<u8>, String> {
+    fn upscale(&mut self, uri: &str) -> Result<Vec<u8>, Box<dyn Error>> {
         let client = Client::new();
 
         let mut headers = HeaderMap::new();
@@ -34,16 +35,10 @@ impl<'a> Upscaler for SegmindUpscaler<'a> {
             .post(format!("{}{}", self.api_host, API_ENDPOINT))
             .headers(headers)
             .json(&body)
-            .send()
-            .map_err(|error| error.to_string())?;
+            .send()?
+            .error_for_status()?;
 
-        if res.status() != StatusCode::OK {
-            return Err(format!("Request error {}", res.status()));
-        }
-
-        res.bytes()
-            .map(|bytes| bytes.to_vec())
-            .map_err(|error| error.to_string())
+        Ok(res.bytes().map(|bytes| bytes.to_vec())?)
     }
 }
 
@@ -58,7 +53,7 @@ mod tests {
         let mut upscaler = SegmindUpscaler::new(&url, "test_key");
 
         let mock = server
-            .mock("POST", "/v1/esrgan-video-upscale")
+            .mock("POST", "/v1/esrgan-video-upscaler")
             .match_header("x-api-key", "test_key")
             .match_body(mockito::Matcher::PartialJsonString(
                 r#"{
@@ -87,7 +82,7 @@ mod tests {
         let mut upscaler = SegmindUpscaler::new(&url, "test_key");
 
         let mock = server
-            .mock("POST", "/v1/esrgan-video-upscale")
+            .mock("POST", "/v1/esrgan-video-upscaler")
             .with_status(400)
             .create();
 
@@ -95,6 +90,6 @@ mod tests {
 
         mock.assert();
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "Request error 400 Bad Request");
+        assert!(result.unwrap_err().to_string().contains("400 Bad Request"));
     }
 }
