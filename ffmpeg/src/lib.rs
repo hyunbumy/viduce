@@ -1,14 +1,8 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+mod command_runner;
+pub use command_runner::{*};
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+mod ffmpeg_command;
+pub use ffmpeg_command::{*};
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+mod ffmpeg_wrapper;
+pub use ffmpeg_wrapper::{*};

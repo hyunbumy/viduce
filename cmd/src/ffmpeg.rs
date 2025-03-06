@@ -1,9 +1,6 @@
-mod ffmpeg_wrapper;
-mod ffmpeg_command;
-
-use self::ffmpeg_command::FfmpegCommand;
-use self::ffmpeg_wrapper::FfmpegWrapper;
-use crate::command_runner::CommandRunner;
+use ffmpeg::FfmpegCommand;
+use ffmpeg::FfmpegWrapper;
+use ffmpeg::CommandRunner;
 use std::{io, io::Write, process::Command};
 
 fn parse_to_fps(input: &str) -> Option<u32> {
@@ -42,7 +39,7 @@ impl FfmpegRunner {
             }
 
             if let Some(resolution) =
-                ffmpeg_command::parse_to_resolution(&Self::get_user_input("Specify resolution:"))
+                ffmpeg::parse_to_resolution(&Self::get_user_input("Specify resolution:"))
             {
                 cmd.set_resolution(resolution);
             }

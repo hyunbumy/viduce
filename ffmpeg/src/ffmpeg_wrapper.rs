@@ -1,5 +1,5 @@
 use crate::command_runner::CommandRunner;
-use crate::ffmpeg::FfmpegCommand;
+use crate::ffmpeg_command::FfmpegCommand;
 use std::io;
 
 pub struct FfmpegError {
@@ -55,7 +55,7 @@ impl<'a> FfmpegWrapper<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ffmpeg::ffmpeg_command::Resolution;
+    use crate::ffmpeg_command::Resolution;
 
     struct MockCommandRunner {
         last_run_command: String,
