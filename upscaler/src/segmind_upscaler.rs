@@ -4,6 +4,8 @@ use reqwest::header::HeaderMap;
 use std::collections::HashMap;
 use std::error::Error;
 
+const API_HOST: &str = "https://api.segmind.com";
+
 const API_ENDPOINT: &str = "/v1/esrgan-video-upscaler";
 
 pub struct SegmindUpscaler<'a> {
@@ -12,7 +14,11 @@ pub struct SegmindUpscaler<'a> {
 }
 
 impl<'a> SegmindUpscaler<'a> {
-    pub fn new(api_host: &'a str, api_key: &'a str) -> Self {
+    pub fn new(api_key: &'a str) -> Self {
+        SegmindUpscaler::new_with_host(API_HOST, api_key)
+    }
+
+    pub fn new_with_host(api_host: &'a str, api_key: &'a str) -> Self {
         SegmindUpscaler { api_host, api_key }
     }
 }
@@ -50,7 +56,7 @@ mod tests {
     fn upscale_success_returns_upscaled_bytes() {
         let mut server = mockito::Server::new();
         let url = server.url();
-        let mut upscaler = SegmindUpscaler::new(&url, "test_key");
+        let mut upscaler = SegmindUpscaler::new_with_host(&url, "test_key");
 
         let mock = server
             .mock("POST", "/v1/esrgan-video-upscaler")
@@ -79,7 +85,7 @@ mod tests {
     fn upscale_fail_returns_error() {
         let mut server = mockito::Server::new();
         let url = server.url();
-        let mut upscaler = SegmindUpscaler::new(&url, "test_key");
+        let mut upscaler = SegmindUpscaler::new_with_host(&url, "test_key");
 
         let mock = server
             .mock("POST", "/v1/esrgan-video-upscaler")

@@ -1,16 +1,8 @@
-mod segmind_upscaler;
-
 use std::env;
-use std::error::Error;
 use std::io;
 use std::io::Write;
 use std::fs::File;
-
-trait Upscaler {
-    fn upscale(&mut self, uri: &str) -> Result<Vec<u8>, Box<dyn Error>>;
-}
-
-const SEGMIND_HOST: &str = "https://api.segmind.com";
+use upscaler::Upscaler;
 
 // TODO: Get the actual video URL once we have to ability to upload actual videos.
 const VIDEO_URL: &str =
@@ -39,7 +31,7 @@ impl UpscalerRunner {
         };
 
         println!("Upscaling...");
-        let mut upscaler = segmind_upscaler::SegmindUpscaler::new(SEGMIND_HOST, &api_key);
+        let mut upscaler = upscaler::SegmindUpscaler::new(&api_key);
         let result = match upscaler.upscale(VIDEO_URL) {
             Ok(res) => res,
             Err(e) => {
