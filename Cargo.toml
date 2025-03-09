@@ -1,7 +1,7 @@
 [workspace]
 
 members = [
-    "cmd", "ffmpeg", "upscaler",
+    "app_api", "cmd", "ffmpeg", "upscaler",
 ]
 
 resolver = "2"
