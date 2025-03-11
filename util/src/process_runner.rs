@@ -1,7 +1,7 @@
 use std::io::Result;
 
 pub trait ProcessRunner {
-    fn run(&mut self, program: &str, args: &[String]) -> Result<()>;
+    fn run(&mut self, program: &str, args: &[&str]) -> Result<()>;
 }
 
 mod default_runner;

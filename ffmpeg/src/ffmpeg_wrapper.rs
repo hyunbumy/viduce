@@ -1,6 +1,6 @@
-use util::process_runner::ProcessRunner;
 use crate::ffmpeg_command::FfmpegCommand;
 use std::io;
+use util::process_runner::ProcessRunner;
 
 pub struct FfmpegError {
     pub msg: String,
@@ -26,23 +26,29 @@ impl<'a> FfmpegWrapper<'a> {
     }
 
     pub fn execute(&mut self, command: FfmpegCommand) -> Result<(), FfmpegError> {
-        let mut args: Vec<String> = vec![
-            String::from("-y"), // Force overwrite
-            String::from("-i"), // Set input
-            format!("assets/input/{}", command.input),
+        let input = format!("assets/input/{}", command.input);
+        let mut args = vec![
+            "-y", // Force overwrite
+            "-i", // Set input
+            input.as_str(),
         ];
 
+        let mut res_str = None;
         if let Some(res) = command.resolution {
-            args.push(String::from("-vf"));
-            args.push(format!("scale=-2:{}", res as i32));
+            args.push("-vf");
+            let temp = res_str.insert(format!("scale=-2:{}", res as i32));
+            args.push(temp.as_str());
         }
 
+        let mut fps_str = None;
         if let Some(fps) = command.fps {
-            args.push(String::from("-r"));
-            args.push(format!("{}", fps as i32));
+            args.push("-r");
+            let temp = fps_str.insert(format!("{}", fps));
+            args.push(temp.as_str());
         }
 
-        args.push(format!("assets/output/{}", command.output));
+        let output = format!("assets/output/{}", command.output);
+        args.push(output.as_str());
 
         self.runner
             .run("ffmpeg", &args)
@@ -79,7 +85,7 @@ mod tests {
     }
 
     impl ProcessRunner for MockCommandRunner {
-        fn run(&mut self, program: &str, args: &[String]) -> io::Result<()> {
+        fn run(&mut self, program: &str, args: &[&str]) -> io::Result<()> {
             self.last_run_command = format!("{program} {}", args.join(" "));
             if let Some(err) = &self.error {
                 return Err(io::Error::new(err.kind(), format!("{err}")));
