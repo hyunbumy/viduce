@@ -1,4 +1,4 @@
-use crate::command_runner::CommandRunner;
+use util::process_runner::ProcessRunner;
 use crate::ffmpeg_command::FfmpegCommand;
 use std::io;
 
@@ -16,12 +16,12 @@ impl FfmpegError {
 // TODO: Flesh out the API
 // TODO: Eventually consider having a long-running ffmpeg instance.
 pub struct FfmpegWrapper<'a> {
-    runner: Box<&'a mut dyn CommandRunner>,
+    runner: Box<&'a mut dyn ProcessRunner>,
 }
 
 impl<'a> FfmpegWrapper<'a> {
     // Creates a new instance
-    pub fn new(runner: Box<&'a mut dyn CommandRunner>) -> Self {
+    pub fn new(runner: Box<&'a mut dyn ProcessRunner>) -> Self {
         FfmpegWrapper { runner }
     }
 
@@ -78,7 +78,7 @@ mod tests {
         }
     }
 
-    impl CommandRunner for MockCommandRunner {
+    impl ProcessRunner for MockCommandRunner {
         fn run(&mut self, program: &str, args: &[String]) -> io::Result<()> {
             self.last_run_command = format!("{program} {}", args.join(" "));
             if let Some(err) = &self.error {

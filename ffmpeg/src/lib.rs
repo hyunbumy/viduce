@@ -1,6 +1,3 @@
-mod command_runner;
-pub use crate::command_runner::CommandRunner;
-
 mod ffmpeg_command;
 mod ffmpeg_wrapper;
 pub mod wrapper {

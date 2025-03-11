@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 ffmpeg = { path = "../ffmpeg" }
 upscaler = { path = "../upscaler" }
+util = { path = "../util" }

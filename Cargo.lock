@@ -114,6 +114,7 @@ version = "0.1.0"
 dependencies = [
  "ffmpeg",
  "upscaler",
+ "util",
 ]
 
 [[package]]
@@ -187,6 +188,9 @@ checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
 [[package]]
 name = "ffmpeg"
 version = "0.1.0"
+dependencies = [
+ "util",
+]
 
 [[package]]
 name = "fnv"
