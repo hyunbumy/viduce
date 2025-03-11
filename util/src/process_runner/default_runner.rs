@@ -10,11 +10,7 @@ impl DefaultRunner {
 }
 
 impl ProcessRunner for DefaultRunner {
-<<<<<<< HEAD
     fn run(&mut self, program: &str, args: &[&str]) -> io::Result<()> {
-=======
-    fn run(&mut self, program: &str, args: &[String]) -> io::Result<()> {
->>>>>>> 477e331 (Move ProcessRunner into a separate crate.)
         let output = Command::new(program).args(args).output()?;
 
         // TODO: Log this explicitly instead of stdout
