@@ -1,7 +1,7 @@
 use ffmpeg::wrapper::command::FfmpegCommand;
 use ffmpeg::wrapper::FfmpegWrapper;
-use ffmpeg::CommandRunner;
-use std::{io, io::Write, process::Command};
+use std::io;
+use util::process_runner::DefaultRunner;
 
 fn parse_to_fps(input: &str) -> Option<u32> {
     match input.parse() {
@@ -61,35 +61,5 @@ impl FfmpegRunner {
         io::stdin().read_line(&mut user_input).unwrap();
         println!("");
         String::from(user_input.trim())
-    }
-}
-
-struct DefaultRunner {}
-
-impl DefaultRunner {
-    fn new() -> DefaultRunner {
-        DefaultRunner {}
-    }
-}
-
-impl CommandRunner for DefaultRunner {
-    fn run(&mut self, program: &str, args: &[String]) -> io::Result<()> {
-        let output = Command::new(program).args(args).output()?;
-
-        // TODO: Log this explicitly instead of stdout
-        io::stdout().write_all(&output.stdout)?;
-        io::stderr().write_all(&output.stderr)?;
-
-        if !output.status.success() {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!(
-                    "Failed to execute with status {}",
-                    output.status.to_string()
-                ),
-            ));
-        }
-
-        Ok(())
     }
 }
