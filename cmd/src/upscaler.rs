@@ -1,8 +1,9 @@
 use std::env;
+use std::fs::File;
 use std::io;
 use std::io::Write;
-use std::fs::File;
 use upscaler::Upscaler;
+use util::uri_io::UriHandler;
 
 // TODO: Get the actual video URL once we have to ability to upload actual videos.
 const VIDEO_URL: &str =
@@ -31,26 +32,11 @@ impl UpscalerRunner {
         };
 
         println!("Upscaling...");
-        let mut upscaler = upscaler::SegmindUpscaler::new(&api_key);
-        let result = match upscaler.upscale(VIDEO_URL) {
-            Ok(res) => res,
-            Err(e) => {
-                println!("Failed to run upscaler with error: {}", e);
-                return;
-            }
+        let mut uri_handler = UriHandler::new();
+        let mut upscaler = upscaler::SegmindUpscaler::new(&api_key, &mut uri_handler);
+        if let Err(e) = upscaler.upscale(VIDEO_URL, &format!("assets/output/{output}")) {
+            println!("Failed to run upscaler with error: {}", e);
+            return;
         };
-
-        // Write result to output
-        println!("Writing output...");
-        let mut file = match File::create("assets/output/".to_owned() + output) {
-            Ok(file) => file,
-            Err(e) => {
-                println!("Failed to open file: {}", e);
-                return;
-            }
-        };
-        if let Err(e) = file.write_all(&result) {
-            println!("Failed to write to an output: {}", e);
-        }
     }
 }

@@ -3,35 +3,29 @@ use reqwest::blocking::Client;
 use reqwest::header::HeaderMap;
 use std::collections::HashMap;
 use std::error::Error;
-use std::fs::File;
-use std::io::prelude::*;
+use util::uri_io::UriIo;
 
 const API_HOST: &str = "https://api.segmind.com";
 
 const API_ENDPOINT: &str = "/v1/esrgan-video-upscaler";
 
-type WriterFactory = fn(&str) -> Result<Box<dyn Write>, Box<dyn Error>>;
-
 pub struct SegmindUpscaler<'a> {
     api_host: &'a str,
     api_key: &'a str,
-    writer_factory: WriterFactory,
+    // We can probably make this a generic, not trait object
+    uri_handler: &'a mut dyn UriIo,
 }
 
 impl<'a> SegmindUpscaler<'a> {
-    pub fn new(api_key: &'a str) -> Self {
-        SegmindUpscaler::new_internal(API_HOST, api_key, |output_uri| {
-            File::create(output_uri)
-                .map(|file| Box::new(file) as Box<dyn Write>)
-                .map_err(|e| Box::new(e) as Box<dyn Error>)
-        })
+    pub fn new(api_key: &'a str, uri_handler: &'a mut dyn UriIo) -> Self {
+        SegmindUpscaler::new_internal(API_HOST, api_key, uri_handler)
     }
 
-    fn new_internal(api_host: &'a str, api_key: &'a str, writer_factory: WriterFactory) -> Self {
+    fn new_internal(api_host: &'a str, api_key: &'a str, uri_handler: &'a mut dyn UriIo) -> Self {
         SegmindUpscaler {
             api_host,
             api_key,
-            writer_factory,
+            uri_handler,
         }
     }
 }
@@ -58,9 +52,7 @@ impl<'a> Upscaler for SegmindUpscaler<'a> {
             .error_for_status()?;
         let bytes = res.bytes()?;
 
-        let mut output_writer = (self.writer_factory)(output_uri)?;
-        output_writer.write_all(bytes.iter().as_slice())?;
-        output_writer.flush()?;
+        self.uri_handler.write(output_uri, &bytes)?;
         Ok(())
     }
 }
@@ -69,28 +61,23 @@ impl<'a> Upscaler for SegmindUpscaler<'a> {
 mod tests {
     use super::*;
 
-    struct MockWriter {
-        expected_bytes: &'static [u8],
+    struct MockUriHandler {
         bytes: Vec<u8>,
     }
 
-    impl MockWriter {
-        fn new(expected_bytes: &'static [u8]) -> Self {
-            MockWriter {
-                expected_bytes,
-                bytes: Vec::new(),
-            }
+    impl MockUriHandler {
+        fn new() -> Self {
+            MockUriHandler { bytes: Vec::new() }
         }
     }
 
-    impl Write for MockWriter {
-        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-            self.bytes.extend_from_slice(buf);
-            Ok(buf.len())
+    impl UriIo for MockUriHandler {
+        fn read(&mut self, _input_uri: &str, _buf: &mut [u8]) -> std::io::Result<usize> {
+            Ok(0)
         }
 
-        fn flush(&mut self) -> std::io::Result<()> {
-            assert_eq!(self.bytes, self.expected_bytes.to_vec());
+        fn write(&mut self, _output_uri: &str, buf: &[u8]) -> std::io::Result<()> {
+            self.bytes = buf.to_vec();
             Ok(())
         }
     }
@@ -99,10 +86,9 @@ mod tests {
     fn upscale_success_returns_upscaled_bytes() {
         let mut server = mockito::Server::new();
         let url = server.url();
-        let mut upscaler = SegmindUpscaler::new_internal(&url, "test_key", |output_uri| {
-            assert_eq!(output_uri, "output.mp4");
-            Ok(Box::new(MockWriter::new(b"1234")))
-        });
+
+        let mut mock_uri_handler = MockUriHandler::new();
+        let mut upscaler = SegmindUpscaler::new_internal(&url, "test_key", &mut mock_uri_handler);
 
         let mock = server
             .mock("POST", "/v1/esrgan-video-upscaler")
@@ -124,15 +110,16 @@ mod tests {
 
         mock.assert();
         assert!(result.is_ok());
+        assert_eq!(mock_uri_handler.bytes, "1234".as_bytes());
     }
 
     #[test]
     fn upscale_fail_returns_error() {
         let mut server = mockito::Server::new();
         let url = server.url();
-        let mut upscaler = SegmindUpscaler::new_internal(&url, "test_key", |_output_uri| {
-            Ok(Box::new(MockWriter::new(b"")))
-        });
+
+        let mut mock_uri_handler = MockUriHandler::new();
+        let mut upscaler = SegmindUpscaler::new_internal(&url, "test_key", &mut mock_uri_handler);
 
         let mock = server
             .mock("POST", "/v1/esrgan-video-upscaler")
