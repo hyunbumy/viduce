@@ -1,7 +1,5 @@
 use std::env;
-use std::fs::File;
 use std::io;
-use std::io::Write;
 use upscaler::Upscaler;
 use util::uri_io::UriHandler;
 
