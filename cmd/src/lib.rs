@@ -1,3 +1,3 @@
 pub mod ffmpeg;
-pub mod upscaler;
 pub mod realesrgan;
+pub mod upscaler;
