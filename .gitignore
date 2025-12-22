@@ -1,4 +1,5 @@
 **/target
 *.code-workspace
+
 assets
 bin

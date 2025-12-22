@@ -1,5 +1,6 @@
 use cmd::ffmpeg::FfmpegRunner;
 use cmd::upscaler::UpscalerRunner;
+use cmd::realesrgan::RealEsrganRunner;
 use std::env;
 
 // TODO(hyunbumy): Figure out how we would package ffmpeg binary
@@ -13,6 +14,7 @@ fn main() {
     match option.as_str() {
         "ffmpeg" => FfmpegRunner::new().run(),
         "upscaler" => UpscalerRunner::new().run(),
+        "realesrgan" => RealEsrganRunner::new().run(),
         _ => println!("Unknown option {option}")
     }
 }

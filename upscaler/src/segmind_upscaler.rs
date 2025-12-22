@@ -3,6 +3,7 @@ use reqwest::blocking::Client;
 use reqwest::header::HeaderMap;
 use std::collections::HashMap;
 use std::error::Error;
+use util::uri_io::UriIo;
 
 const API_HOST: &str = "https://api.segmind.com";
 
@@ -11,20 +12,26 @@ const API_ENDPOINT: &str = "/v1/esrgan-video-upscaler";
 pub struct SegmindUpscaler<'a> {
     api_host: &'a str,
     api_key: &'a str,
+    // We can probably make this a generic, not trait object
+    uri_handler: &'a mut dyn UriIo,
 }
 
 impl<'a> SegmindUpscaler<'a> {
-    pub fn new(api_key: &'a str) -> Self {
-        SegmindUpscaler::new_with_host(API_HOST, api_key)
+    pub fn new(api_key: &'a str, uri_handler: &'a mut dyn UriIo) -> Self {
+        SegmindUpscaler::new_internal(API_HOST, api_key, uri_handler)
     }
 
-    pub fn new_with_host(api_host: &'a str, api_key: &'a str) -> Self {
-        SegmindUpscaler { api_host, api_key }
+    fn new_internal(api_host: &'a str, api_key: &'a str, uri_handler: &'a mut dyn UriIo) -> Self {
+        SegmindUpscaler {
+            api_host,
+            api_key,
+            uri_handler,
+        }
     }
 }
 
 impl<'a> Upscaler for SegmindUpscaler<'a> {
-    fn upscale(&mut self, uri: &str) -> Result<Vec<u8>, Box<dyn Error>> {
+    fn upscale(&mut self, input_uri: &str, output_uri: &str) -> Result<(), Box<dyn Error>> {
         let client = Client::new();
 
         let mut headers = HeaderMap::new();
@@ -32,7 +39,7 @@ impl<'a> Upscaler for SegmindUpscaler<'a> {
 
         let body = HashMap::from([
             ("crop_to_fit", "False"),
-            ("input_video", uri),
+            ("input_video", input_uri),
             ("res_model", "RealESRGAN_x4plus"),
             ("resolution", "FHD"),
         ]);
@@ -43,8 +50,10 @@ impl<'a> Upscaler for SegmindUpscaler<'a> {
             .json(&body)
             .send()?
             .error_for_status()?;
+        let bytes = res.bytes()?;
 
-        Ok(res.bytes().map(|bytes| bytes.to_vec())?)
+        self.uri_handler.write(output_uri, &bytes)?;
+        Ok(())
     }
 }
 
@@ -52,11 +61,34 @@ impl<'a> Upscaler for SegmindUpscaler<'a> {
 mod tests {
     use super::*;
 
+    struct MockUriHandler {
+        bytes: Vec<u8>,
+    }
+
+    impl MockUriHandler {
+        fn new() -> Self {
+            MockUriHandler { bytes: Vec::new() }
+        }
+    }
+
+    impl UriIo for MockUriHandler {
+        fn read(&mut self, _input_uri: &str, _buf: &mut [u8]) -> std::io::Result<usize> {
+            Ok(0)
+        }
+
+        fn write(&mut self, _output_uri: &str, buf: &[u8]) -> std::io::Result<()> {
+            self.bytes = buf.to_vec();
+            Ok(())
+        }
+    }
+
     #[test]
     fn upscale_success_returns_upscaled_bytes() {
         let mut server = mockito::Server::new();
         let url = server.url();
-        let mut upscaler = SegmindUpscaler::new_with_host(&url, "test_key");
+
+        let mut mock_uri_handler = MockUriHandler::new();
+        let mut upscaler = SegmindUpscaler::new_internal(&url, "test_key", &mut mock_uri_handler);
 
         let mock = server
             .mock("POST", "/v1/esrgan-video-upscaler")
@@ -74,25 +106,27 @@ mod tests {
             .with_body("1234")
             .create();
 
-        let result = upscaler.upscale("input_video.mp4");
+        let result = upscaler.upscale("input_video.mp4", "output.mp4");
 
         mock.assert();
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "1234".as_bytes());
+        assert_eq!(mock_uri_handler.bytes, "1234".as_bytes());
     }
 
     #[test]
     fn upscale_fail_returns_error() {
         let mut server = mockito::Server::new();
         let url = server.url();
-        let mut upscaler = SegmindUpscaler::new_with_host(&url, "test_key");
+
+        let mut mock_uri_handler = MockUriHandler::new();
+        let mut upscaler = SegmindUpscaler::new_internal(&url, "test_key", &mut mock_uri_handler);
 
         let mock = server
             .mock("POST", "/v1/esrgan-video-upscaler")
             .with_status(400)
             .create();
 
-        let result = upscaler.upscale("input_video.mp4");
+        let result = upscaler.upscale("input_video.mp4", "output.mp4");
 
         mock.assert();
         assert!(result.is_err());
