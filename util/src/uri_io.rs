@@ -1,5 +1,5 @@
-use std::io::{Read, Write, self};
 use std::fs::File;
+use std::io::{self, Read, Write};
 
 // Read bytes from or write bytes to the given URI
 pub trait UriIo {
