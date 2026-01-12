@@ -3,7 +3,9 @@ FROM rust:1.92-bookworm AS base
 RUN apt update
 
 # Dependencies for cpp
-RUN apt install -y build-essential
+RUN apt install -y build-essential cmake
+# Depnedencies for ffmpeg
+RUN apt install -y libavformat-dev libavcodec-dev
 
 # Static linking for rust
 RUN apt install -y musl-tools musl-dev
