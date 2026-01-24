@@ -1,5 +1,7 @@
+**/build
 **/target
 *.code-workspace
 
+.vscode
 assets
 bin
