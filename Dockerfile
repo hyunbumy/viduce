@@ -5,20 +5,25 @@ RUN apt update
 # Dependencies for cpp
 RUN apt install -y build-essential cmake
 # Depnedencies for ffmpeg
-RUN apt install -y libavformat-dev libavcodec-dev
-
-# Static linking for rust
-RUN apt install -y musl-tools musl-dev
-RUN rustup target add x86_64-unknown-linux-musl
+RUN apt install -y libavformat-dev libavcodec-dev libavutil-dev
 
 ## Image for building
 FROM base AS build
 WORKDIR /usr/src/viduce
-# TODO: Leverage Docker caching for Rust dependencies
-COPY . .
-RUN cargo build --release --target x86_64-unknown-linux-musl
 
-## Image for deployment
-FROM scratch
-COPY --from=build /usr/src/viduce/target/x86_64-unknown-linux-musl/release/cmd /bin/viduce
-CMD ["viduce", "realesrgan"]
+# Build cpp engine
+WORKDIR engine
+RUN cmake -B build && cmake --build build
+COPY build/lib/libengine_api.so /lib/
+ENV LD_LIBRARY_PATH /lib
+
+# TODO: Leverage Docker caching for Rust dependencies
+WORKDIR /usr/src/viduce
+COPY . .
+RUN cargo build --release
+COPY target/release/cmd /bin/viduce
+
+CMD ["viduce", "engine"]
+
+# TODO: Look into having a separate env for building and running to reduce Docker img size
+
