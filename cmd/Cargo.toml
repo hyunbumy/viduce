@@ -2,8 +2,10 @@
 name = "cmd"
 version = "0.1.0"
 edition = "2021"
+build = "build.rs"
 
 [dependencies]
 ffmpeg = { path = "../ffmpeg" }
 upscaler = { path = "../upscaler" }
 util = { path = "../util" }
+libc = "0.2.0"
