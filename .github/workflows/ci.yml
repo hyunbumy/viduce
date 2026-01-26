@@ -23,6 +23,8 @@ jobs:
       uses: docker/build-push-action@v6
       with:
         outputs: type=cacheonly
-        target: release
+        build-args: |
+          BUILD_TYPE:debug
+        target: build
 
     # TODO: Add step for running unit tests

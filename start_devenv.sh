@@ -8,4 +8,3 @@ podman run --name devenv -v "$(pwd)":/mnt/host/viduce -itd --rm devenv bash
 
 # Attach to the running container
 podman exec -it devenv bash
-
