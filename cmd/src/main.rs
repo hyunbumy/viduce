@@ -1,3 +1,4 @@
+use cmd::engine::EngineRunner;
 use cmd::ffmpeg::FfmpegRunner;
 use cmd::realesrgan::RealEsrganRunner;
 use cmd::upscaler::UpscalerRunner;
@@ -15,6 +16,7 @@ fn main() {
         "ffmpeg" => FfmpegRunner::new().run(),
         "upscaler" => UpscalerRunner::new().run(),
         "realesrgan" => RealEsrganRunner::new().run(),
+        "engine" => EngineRunner::new().run(),
         _ => println!("Unknown option {option}"),
     }
 }

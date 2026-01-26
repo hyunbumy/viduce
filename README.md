@@ -27,4 +27,3 @@
 1. Come up with a heuristics to store just enough frames to be used with the description to be able to "restore" the video
 1. Use GenAI to "restore" the video using the downscaled frames + description
 
-
