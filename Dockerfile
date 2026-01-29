@@ -40,7 +40,13 @@ RUN cargo build ${SERVICE_BUILD}
 RUN cp target/${SERVICE_PATH}/cmd /bin/viduce
 
 ### Execution stage
-# TODO: Look into having a separate env for building and running to reduce Docker img size
-FROM build AS run
-CMD ["viduce", "engine"]
+## Image for deployment
+FROM debian:bookworm-slim
 
+RUN apt update
+RUN apt install -y ffmpeg
+
+COPY --from=build /bin/viduce /bin/viduce
+COPY --from=build /lib/libengine_api.so /lib/
+
+CMD ["viduce", "engine"]
