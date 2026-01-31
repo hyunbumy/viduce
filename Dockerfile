@@ -29,9 +29,8 @@ COPY . .
 # Build cpp engine
 WORKDIR engine
 RUN cmake -B build -DCMAKE_BUILD_TYPE=${ENGINE_BUILD}
-RUN cmake --build build -j 18
+RUN cmake --build build -j8
 RUN cp build/lib/libengine_api.so /lib/
-ENV LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/lib"
 
 # Build Rust
 # TODO: Leverage Docker caching for Rust dependencies
@@ -49,4 +48,4 @@ RUN apt install -y ffmpeg
 COPY --from=build /bin/viduce /bin/viduce
 COPY --from=build /lib/libengine_api.so /lib/
 
-CMD ["viduce", "engine"]
+ENTRYPOINT ["/bin/viduce"]
