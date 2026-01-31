@@ -29,9 +29,8 @@ COPY . .
 # Build cpp engine
 WORKDIR engine
 RUN cmake -B build -DCMAKE_BUILD_TYPE=${ENGINE_BUILD}
-RUN cmake --build build -j 18
+RUN cmake --build build -j8
 RUN cp build/lib/libengine_api.so /lib/
-ENV LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/lib"
 
 # Build Rust
 # TODO: Leverage Docker caching for Rust dependencies
@@ -40,7 +39,13 @@ RUN cargo build ${SERVICE_BUILD}
 RUN cp target/${SERVICE_PATH}/cmd /bin/viduce
 
 ### Execution stage
-# TODO: Look into having a separate env for building and running to reduce Docker img size
-FROM build AS run
-CMD ["viduce", "engine"]
+## Image for deployment
+FROM debian:bookworm-slim
 
+RUN apt update
+RUN apt install -y ffmpeg
+
+COPY --from=build /bin/viduce /bin/viduce
+COPY --from=build /lib/libengine_api.so /lib/
+
+ENTRYPOINT ["/bin/viduce"]
