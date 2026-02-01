@@ -1,4 +1,4 @@
-name: Rust
+name: Build
 
 on:
   push:
@@ -15,6 +15,11 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        lfs: true
+    # Need explicit lfs pull since the lfs option in checkout does not checkout
+    # the actual files.
+    - run: git lfs pull
 
     - name: Setup Docker Buildx
       uses: docker/setup-buildx-action@v3
@@ -22,9 +27,9 @@ jobs:
     - name: Build
       uses: docker/build-push-action@v6
       with:
+        # Need context to use the pulled lfs files from the previous step
+        context: .
         outputs: type=cacheonly
         build-args: |
           BUILD_TYPE:debug
         target: build
-
-    # TODO: Add step for running unit tests
