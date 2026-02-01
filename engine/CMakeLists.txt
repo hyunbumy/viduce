@@ -5,7 +5,7 @@ project(viduce_engine)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(BUILD_TESTING "" OFF)
-if (CMAKE_BUILD_TYPE MATCHES "Debug")
+if (NOT CMAKE_BUILD_TYPE MATCHES "Release")
     set(BUILD_TESTING ON)
     enable_testing()
 endif()

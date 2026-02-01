@@ -8,7 +8,7 @@
 namespace {
 
 TEST(DecodeVideoTest, SuccessfulDecode) {
-  std::string_view valid_path = "data/input.mp4";
+  std::string_view valid_path = "data/test.mp4";
 
   int result = DecodeVideo(valid_path.data());
 

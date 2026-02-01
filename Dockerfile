@@ -30,11 +30,17 @@ COPY . .
 WORKDIR engine
 RUN cmake -B build -DCMAKE_BUILD_TYPE=${ENGINE_BUILD}
 RUN cmake --build build -j8
-RUN cp build/lib/libengine_api.so /lib/
+
+WORKDIR build
+RUN ctest -VV
+
+RUN cp lib/libengine_api.so /lib/
 
 # Build Rust
 # TODO: Leverage Docker caching for Rust dependencies
 WORKDIR /usr/src/viduce
+RUN cargo test
+
 RUN cargo build ${SERVICE_BUILD}
 RUN cp target/${SERVICE_PATH}/cmd /bin/viduce
 
