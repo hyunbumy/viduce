@@ -17,8 +17,8 @@ jobs:
       uses: actions/checkout@v4
       with:
         lfs: true
-    - name: CheckoutLFS
-      uses: actions/checkout@v4
+    # Need explicit lfs pull since the lfs option in checkout does not checkout
+    # the actual files.
     - run: git lfs pull
 
     - name: Setup Docker Buildx
@@ -27,6 +27,8 @@ jobs:
     - name: Build
       uses: docker/build-push-action@v6
       with:
+        # Need context to use the pulled lfs files from the previous step
+        context: .
         outputs: type=cacheonly
         build-args: |
           BUILD_TYPE:debug
