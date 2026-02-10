@@ -36,7 +36,7 @@ absl::Status DecodeVideoInternal(const char* input_path) {
     }
 
     AVFrame* av_frame = (*frame)->get_frame();
-    spdlog::info("Decoded frame info: res ({%d}x{%d}", av_frame->width,
+    spdlog::info("Decoded frame info: res ({}x{})", av_frame->width,
                  av_frame->height);
   }
 
