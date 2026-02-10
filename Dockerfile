@@ -6,7 +6,7 @@ FROM rust:1.92-bookworm AS base
 RUN apt update
 
 # Dependencies for cpp
-RUN apt install -y build-essential cmake
+RUN apt install -y build-essential cmake gdb
 # Depnedencies for ffmpeg
 RUN apt install -y libavformat-dev libavcodec-dev libavutil-dev
 
