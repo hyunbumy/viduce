@@ -15,14 +15,28 @@ namespace viduce::engine {
 
 class Frame {
  public:
-  Frame() { frame_ = av_frame_alloc(); }
+  // Extra information about the stream that the frame belongs to.
+  struct StreamInfo {
+    int stream_index = -1;
+    AVMediaType media_type = AVMEDIA_TYPE_UNKNOWN;
+    AVCodecID codec_id = AV_CODEC_ID_NONE;
+  };
+
+  static std::unique_ptr<Frame> Create(AVStream* stream);
 
   ~Frame() { av_frame_free(&frame_); }
 
-  AVFrame* get_frame() { return frame_; }
+  AVFrame* frame() { return frame_; }
+
+  const StreamInfo& stream_info() const { return stream_info_; }
 
  private:
+  explicit Frame(const StreamInfo& stream_info) : stream_info_(stream_info) {
+    frame_ = av_frame_alloc();
+  }
+
   AVFrame* frame_;
+  const StreamInfo stream_info_;
 };
 
 class FrameReader {

@@ -18,6 +18,19 @@ extern "C" {
 
 namespace {
 
+class Packet {
+ public:
+  Packet() { packet_ = av_packet_alloc(); }
+
+  ~Packet() { av_packet_unref(packet_); }
+
+  AVPacket* get_packet() { return packet_; }
+
+ private:
+  // TODO: Figure out how to do static
+  AVPacket* packet_;
+};
+
 // Return all codec contexts for the streams in the resource.
 // The index of the codec corresponds to the stream index.
 absl::StatusOr<std::vector<AVCodecContext*>> GetCodecs(
@@ -61,24 +74,16 @@ absl::StatusOr<std::vector<AVCodecContext*>> GetCodecs(
   return codecs;
 }
 
-class Packet {
- public:
-  Packet() {
-    packet_ = av_packet_alloc();
-  }
-
-  ~Packet() { av_packet_unref(packet_); }
-
-  AVPacket* get_packet() { return packet_; }
-
- private:
-  // TODO: Figure out how to do static
-  AVPacket* packet_;
-};
-
 }  // namespace
 
 namespace viduce::engine {
+
+std::unique_ptr<Frame> Frame::Create(AVStream* stream) {
+  return std::unique_ptr<Frame>(
+      new Frame(StreamInfo{.stream_index = stream->index,
+                           .media_type = stream->codecpar->codec_type,
+                           .codec_id = stream->codecpar->codec_id}));
+}
 
 absl::StatusOr<std::unique_ptr<FrameReader>> FrameReader::Create(
     std::string_view url) {
@@ -137,8 +142,9 @@ absl::StatusOr<std::unique_ptr<Frame>> FrameReader::ReadNextFrame() {
                           AvErrToStr(res)));
     }
 
-    auto frame = std::make_unique<Frame>();
-    AVFrame* av_frame = frame->get_frame();
+    std::unique_ptr<Frame> frame =
+        Frame::Create(format_ctx_->streams[av_packet->stream_index]);
+    AVFrame* av_frame = frame->frame();
     int decode_res = avcodec_receive_frame(codec, av_frame);
     if (decode_res == AVERROR(EAGAIN)) {
       // Need to send more packets before we can receive frames. Keep reading.

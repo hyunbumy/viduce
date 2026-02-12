@@ -10,6 +10,8 @@
 
 extern "C" {
 #include <libavcodec/avcodec.h>
+#include <libavcodec/codec_id.h>
+#include <libavutil/avutil.h>
 }  // extern "C"
 
 namespace {
@@ -35,9 +37,14 @@ absl::Status DecodeVideoInternal(const char* input_path) {
       break;
     }
 
-    AVFrame* av_frame = (*frame)->get_frame();
-    spdlog::info("Decoded frame info: res ({}x{})", av_frame->width,
-                 av_frame->height);
+    viduce::engine::Frame::StreamInfo stream_info = (*frame)->stream_info();
+    AVFrame* av_frame = (*frame)->frame();
+    spdlog::info(
+        "Decoded frame info: res ({}x{}), stream_index: {}, media_type: {}, "
+        "codec_id: {}",
+        av_frame->width, av_frame->height, stream_info.stream_index,
+        av_get_media_type_string(stream_info.media_type),
+        avcodec_get_name(stream_info.codec_id));
   }
 
   return absl::OkStatus();
