@@ -10,7 +10,7 @@ target_link_libraries(frame_reader PRIVATE util)
 
 add_library(engine_api SHARED engine_api.cc)
 target_include_directories(engine_api PUBLIC ../include)
-target_link_libraries(engine_api PRIVATE spdlog::spdlog absl::status absl::statusor avcodec)
+target_link_libraries(engine_api PRIVATE spdlog::spdlog absl::status absl::statusor avcodec avutil)
 target_link_libraries(engine_api PRIVATE frame_reader)
 
 set_target_properties(engine_api PROPERTIES
