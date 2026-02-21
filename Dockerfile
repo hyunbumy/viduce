@@ -5,10 +5,15 @@ ARG BUILD_TYPE="debug"
 FROM rust:1.92-bookworm AS base 
 RUN apt update
 
+# Sys deps
+RUN apt install -y git-lfs
 # Dependencies for cpp
 RUN apt install -y build-essential cmake gdb
 # Depnedencies for ffmpeg
 RUN apt install -y libavformat-dev libavcodec-dev libavutil-dev
+# Python dependencies
+# Setup uv
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ### Temporary stages for build type
 FROM base AS build-debug
