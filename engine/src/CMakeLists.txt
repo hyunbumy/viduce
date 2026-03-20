@@ -12,6 +12,18 @@ target_include_directories(frame_reader PUBLIC ../include)
 target_link_libraries(frame_reader PRIVATE absl::status absl::statusor absl::strings avcodec avformat avutil)
 target_link_libraries(frame_reader PRIVATE frame util)
 
+find_package(OpenCV REQUIRED)
+add_library(upscaler STATIC upscaler.cc)
+target_include_directories(upscaler PUBLIC ../include)
+target_include_directories(upscaler PRIVATE ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(upscaler
+    PRIVATE
+    absl::status
+    absl::statusor
+    litert
+    ${OpenCV_LIBS}
+)
+
 add_library(engine_api SHARED engine_api.cc)
 target_include_directories(engine_api PUBLIC ../include)
 target_link_libraries(engine_api PRIVATE spdlog::spdlog absl::status absl::statusor avcodec avutil)
