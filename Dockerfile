@@ -8,9 +8,11 @@ RUN apt update
 # Sys deps
 RUN apt install -y git-lfs
 # Dependencies for cpp
-RUN apt install -y build-essential cmake gdb
+RUN apt install -y build-essential clang cmake gdb
 # Depnedencies for ffmpeg
 RUN apt install -y libavformat-dev libavcodec-dev libavutil-dev
+# Dependencies for opencv
+RUN apt install -y libopencv-dev
 # Python dependencies
 # Setup uv
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
