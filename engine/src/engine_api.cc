@@ -5,6 +5,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "engine/frame.h"
 #include "engine/frame_reader.h"
 #include "spdlog/spdlog.h"
 
