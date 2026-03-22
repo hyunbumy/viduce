@@ -20,18 +20,10 @@ class Frame {
     AVCodecID codec_id = AV_CODEC_ID_NONE;
   };
 
-  static std::unique_ptr<Frame> Create(AVStream* stream) {
-    return Frame::Create(StreamInfo{.stream_index = stream->index,
-                                    .media_type = stream->codecpar->codec_type,
-                                    .codec_id = stream->codecpar->codec_id});
-  }
+  static absl::StatusOr<std::unique_ptr<Frame>> Create(
+      const StreamInfo& stream_info);
 
-  static std::unique_ptr<Frame> Create(const StreamInfo& stream_info) {
-    AVFrame* frame = av_frame_alloc();
-    return std::make_unique<Frame>(stream_info);
-  }
-
-  ~Frame() { av_frame_free(&frame_); }
+  ~Frame();
 
   AVFrame* frame() { return frame_; }
 
