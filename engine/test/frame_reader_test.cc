@@ -4,6 +4,7 @@
 #include <string_view>
 
 #include "absl/status/status.h"
+#include "engine/frame.h"
 #include "gtest/gtest.h"
 
 TEST(CreateTest, SuccessWithValidUrl) {

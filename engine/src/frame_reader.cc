@@ -23,7 +23,7 @@ class Packet {
  public:
   Packet() { packet_ = av_packet_alloc(); }
 
-  ~Packet() { av_packet_unref(packet_); }
+  ~Packet() { av_packet_free(&packet_); }
 
   AVPacket* get_packet() { return packet_; }
 
@@ -102,6 +102,7 @@ FrameReader::~FrameReader() {
   for (AVCodecContext* codec : codecs_) {
     avcodec_free_context(&codec);
   }
+  avformat_close_input(&format_ctx_);
   avformat_free_context(format_ctx_);
 }
 
@@ -136,9 +137,15 @@ absl::StatusOr<std::unique_ptr<Frame>> FrameReader::ReadNextFrame() {
                           AvErrToStr(res)));
     }
 
-    std::unique_ptr<Frame> frame =
-        Frame::Create(format_ctx_->streams[av_packet->stream_index]);
-    AVFrame* av_frame = frame->frame();
+    AVStream* stream = format_ctx_->streams[av_packet->stream_index];
+    Frame::StreamInfo stream_info{.stream_index = stream->index,
+                                  .media_type = stream->codecpar->codec_type,
+                                  .codec_id = stream->codecpar->codec_id};
+    absl::StatusOr<std::unique_ptr<Frame>> frame = Frame::Create(stream_info);
+    if (!frame.ok()) {
+      return frame;
+    }
+    AVFrame* av_frame = (*frame)->frame();
     int decode_res = avcodec_receive_frame(codec, av_frame);
     if (decode_res == AVERROR(EAGAIN)) {
       // Need to send more packets before we can receive frames. Keep reading.
