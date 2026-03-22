@@ -8,6 +8,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
+#include "engine/frame.h"
 #include "engine/util.h"
 
 extern "C" {
@@ -77,13 +78,6 @@ absl::StatusOr<std::vector<AVCodecContext*>> GetCodecs(
 }  // namespace
 
 namespace viduce::engine {
-
-std::unique_ptr<Frame> Frame::Create(AVStream* stream) {
-  return std::unique_ptr<Frame>(
-      new Frame(StreamInfo{.stream_index = stream->index,
-                           .media_type = stream->codecpar->codec_type,
-                           .codec_id = stream->codecpar->codec_id}));
-}
 
 absl::StatusOr<std::unique_ptr<FrameReader>> FrameReader::Create(
     std::string_view url) {
