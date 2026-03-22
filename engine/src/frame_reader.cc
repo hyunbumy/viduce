@@ -62,7 +62,7 @@ absl::StatusOr<std::vector<AVCodecContext*>> GetCodecs(
       return absl::Status(
           absl::StatusCode::kInternal,
           absl::StrFormat(
-              "Failed to allocate codec context for url: %s, streamID: %s",
+              "Failed to allocate codec context for url: %s, streamID: %d",
               format_ctx->url, i));
     }
 
