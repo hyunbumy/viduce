@@ -34,12 +34,6 @@ absl::Status Validate(Frame* frame) {
   return absl::OkStatus();
 }
 
-struct ModelIO {
-  // Flattened pixel data in (ch, h, w) layout with normalized values in
-  // [0.0, 1.0]
-  std::vector<float> data;
-};
-
 struct ConversionSpec {
   int width;
   int height;
@@ -78,19 +72,19 @@ absl::StatusOr<std::unique_ptr<Frame>> ConvertColor(
 
 }  // namespace
 
-Upscaler::Upscaler(std::unique_ptr<Model> model) : model_(std::move(model)) {}
+Upscaler::Upscaler(Model* model) : model_(model) {}
 
 absl::StatusOr<std::unique_ptr<Frame>> Upscaler::Upscale(Frame* input_frame) {
   if (absl::Status status = Validate(input_frame); status != absl::OkStatus()) {
     return status;
   }
 
-  absl::StatusOr<std::vector<float>> input = ToModelInput(input_frame);
+  absl::StatusOr<Model::ModelIo> input = ToModelInput(input_frame);
   if (!input.ok()) {
     return input.status();
   }
 
-  absl::StatusOr<std::vector<float>> output = model_->RunModel(*input);
+  absl::StatusOr<Model::ModelIo> output = model_->RunModel(*input);
   if (!output.ok()) {
     return output.status();
   }
@@ -98,7 +92,7 @@ absl::StatusOr<std::unique_ptr<Frame>> Upscaler::Upscale(Frame* input_frame) {
   return FromModelOutput(input_frame, *output);
 }
 
-absl::StatusOr<std::vector<float>> Upscaler::ToModelInput(Frame* frame) {
+absl::StatusOr<Model::ModelIo> Upscaler::ToModelInput(Frame* frame) {
   // Convert input frame to RGB format; for now do 8-bit
   // TODO: Consider supporting higher img depth
   absl::StatusOr<std::unique_ptr<Frame>> rgb_frame =
@@ -118,16 +112,16 @@ absl::StatusOr<std::vector<float>> Upscaler::ToModelInput(Frame* frame) {
   for (int i = 0; i < normalized.size(); ++i) {
     normalized[i] = rgb_avframe->data[0][i] / float(kModelNormScale);
   }
-  return std::move(normalized);
+  return Model::ModelIo{.data = std::move(normalized)};
 }
 
 // Convert the model output back to an image.
 absl::StatusOr<std::unique_ptr<Frame>> Upscaler::FromModelOutput(
-    Frame* input_frame, const std::vector<float>& output) {
+    Frame* input_frame, const Model::ModelIo& output) {
   // Denormalize pixel values into RGB24
-  std::vector<uint8_t> denormalized(output.size());
+  std::vector<uint8_t> denormalized(output.data.size());
   for (int i = 0; i < denormalized.size(); ++i) {
-    denormalized[i] = output[i] * kModelNormScale;
+    denormalized[i] = output.data[i] * kModelNormScale;
   }
 
   AVFrame* input_avframe = input_frame->frame();
@@ -140,6 +134,10 @@ absl::StatusOr<std::unique_ptr<Frame>> Upscaler::FromModelOutput(
   int size = av_image_fill_arrays(
       temp_avframe->data, temp_avframe->linesize, denormalized.data(),
       kModelIOFormat, temp_avframe->width, temp_avframe->height, /*align=*/1);
+  if (size < 0) {
+    return absl::InternalError("Failed to create temp output RGB Frame: " +
+                               AvErrToStr(size));
+  }
 
   // Convert to a new frame in the same format as the input frame.
   return ConvertColor(temp_frame->get(),

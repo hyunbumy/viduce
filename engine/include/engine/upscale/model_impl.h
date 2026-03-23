@@ -16,8 +16,8 @@ class ModelImpl : public Model {
 
   Info getInfo() override;
 
-  absl::StatusOr<std::vector<float>> RunModel(
-      const std::vector<float>& input) override;
+  // For now, the model is hardcoded to support 240x240 dimension input.
+  absl::StatusOr<ModelIo> RunModel(const ModelIo& input) override;
 
  private:
   explicit ModelImpl(litert::Environment& env, litert::CompiledModel& model);

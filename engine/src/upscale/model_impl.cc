@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "absl/status/statusor.h"
+#include "engine/upscale/model.h"
 #include "litert/c/litert_common.h"
 #include "litert/cc/litert_common.h"
 #include "litert/cc/litert_compiled_model.h"
@@ -23,6 +24,9 @@ constexpr int kUpscale = 4;
 
 }  // namespace
 
+ModelImpl::ModelImpl(litert::Environment& env, litert::CompiledModel& model)
+    : env_(std::move(env)), model_(std::move(model)) {}
+
 absl::StatusOr<ModelImpl> ModelImpl::Create(std::string model_path) {
   // Initialize LiteRT environment
   LITERT_ASSIGN_OR_RETURN(litert::Environment env,
@@ -36,13 +40,13 @@ absl::StatusOr<ModelImpl> ModelImpl::Create(std::string model_path) {
   return ModelImpl(env, compiled_model);
 }
 
-Model::Info ModelImpl::getInfo() { Model::Info{.scale = kUpscale}; }
+Model::Info ModelImpl::getInfo() { return Model::Info{.scale = kUpscale}; }
 
-absl::StatusOr<std::vector<float>> ModelImpl::RunModel(
-    const std::vector<float>& input) {
+absl::StatusOr<Model::ModelIo> ModelImpl::RunModel(
+    const Model::ModelIo& input) {
   LITERT_ASSIGN_OR_RETURN(std::vector<litert::TensorBuffer> input_buffers,
                           model_.CreateInputBuffers());
-  input_buffers[0].Write<float>(absl::MakeConstSpan(input));
+  input_buffers[0].Write<float>(absl::MakeConstSpan(input.data));
 
   LITERT_ASSIGN_OR_RETURN(std::vector<litert::TensorBuffer> output_buffers,
                           model_.CreateOutputBuffers());
@@ -59,7 +63,7 @@ absl::StatusOr<std::vector<float>> ModelImpl::RunModel(
     val = std::min(std::max(val, 0.0f), 1.0f);
   }
 
-  return std::move(output);
+  return ModelIo{.data = std::move(output)};
 }
 
 }  // namespace viduce::engine::upscale

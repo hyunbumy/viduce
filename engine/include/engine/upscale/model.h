@@ -17,8 +17,12 @@ class Model {
   };
   virtual Info getInfo() = 0;
 
-  virtual absl::StatusOr<std::vector<float>> RunModel(
-      const std::vector<float>& input) = 0;
+  struct ModelIo {
+    // 1-D array of normalized RBG pixel data in the range of [0.0f, 1.0f] with
+    // a layout of (channel, height, width).
+    std::vector<float> data;
+  };
+  virtual absl::StatusOr<ModelIo> RunModel(const ModelIo& input) = 0;
 };
 
 }  // namespace viduce::engine::upscale

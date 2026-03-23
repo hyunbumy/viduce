@@ -12,17 +12,17 @@ namespace viduce::engine::upscale {
 
 class Upscaler {
  public:
-  explicit Upscaler(std::unique_ptr<Model> model);
+  explicit Upscaler(Model* model);
 
   // Returns an upscaled version of the input image frame.
   absl::StatusOr<std::unique_ptr<Frame>> Upscale(Frame* input_frame);
 
  private:
-  absl::StatusOr<std::vector<float>> ToModelInput(Frame* input);
+  absl::StatusOr<Model::ModelIo> ToModelInput(Frame* input);
   absl::StatusOr<std::unique_ptr<Frame>> FromModelOutput(
-      Frame* input, const std::vector<float>& output);
+      Frame* input, const Model::ModelIo& output);
 
-  std::unique_ptr<Model> model_;
+  Model* model_;
 };
 
 }  // namespace viduce::engine::upscale
