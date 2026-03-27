@@ -117,24 +117,21 @@ absl::StatusOr<std::unique_ptr<Frame>> FrameReader::ReadNextFrame() {
     AVPacket* av_packet = packet.get_packet();
     // av_read_frame will return packets from any of the streams
     int read_res = av_read_frame(format_ctx_, av_packet);
-    if (read_res == AVERROR_EOF) {
-      // Done processing
-      return nullptr;
-    }
-
-    if (read_res != 0) {
+    // Keep reading even though EOF for flushing decoder.
+    if (read_res != 0 && read_res != AVERROR_EOF) {
       return absl::Status(absl::StatusCode::kInternal,
                           absl::StrFormat("Error reading frame with error: %s",
                                           AvErrToStr(read_res)));
     }
 
     AVCodecContext* codec = codecs_[av_packet->stream_index];
-    if (int res = avcodec_send_packet(codec, av_packet); res != 0) {
+    int packet_res = avcodec_send_packet(codec, av_packet);
+    if (packet_res != 0 && packet_res != AVERROR_EOF) {
       return absl::Status(
           absl::StatusCode::kInternal,
           absl::StrFormat("Error sending packet for decoding with "
                           "error: %s",
-                          AvErrToStr(res)));
+                          AvErrToStr(packet_res)));
     }
 
     AVStream* stream = format_ctx_->streams[av_packet->stream_index];
@@ -150,6 +147,11 @@ absl::StatusOr<std::unique_ptr<Frame>> FrameReader::ReadNextFrame() {
     if (decode_res == AVERROR(EAGAIN)) {
       // Need to send more packets before we can receive frames. Keep reading.
       continue;
+    }
+
+    if (decode_res == AVERROR_EOF) {
+      // Done with reading all frames.
+      return nullptr;
     }
 
     if (decode_res != 0) {
