@@ -19,6 +19,8 @@ namespace viduce::engine::upscale {
 
 namespace {
 
+using ::viduce::engine::util::AvErrToStr;
+
 absl::Status Validate(Frame* frame) {
   if (frame == nullptr) {
     return absl::InvalidArgumentError("Input frame is null");
