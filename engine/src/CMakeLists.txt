@@ -1,15 +1,33 @@
 # TODO: Figure out how to encapsulate compilation units
+
+add_subdirectory(upscale)
+
 add_library(util STATIC util.cc)
 target_include_directories(util PUBLIC ../include)
 target_link_libraries(util PRIVATE avutil)
 
 add_library(frame STATIC frame.cc)
 target_include_directories(frame PUBLIC ../include)
-target_link_libraries(frame PRIVATE absl::statusor avcodec avformat avutil)
+target_link_libraries(frame
+    PRIVATE
+    absl::statusor
+    avcodec
+    avformat
+    avutil
+)
 
 add_library(frame_reader STATIC frame_reader.cc)
 target_include_directories(frame_reader PUBLIC ../include)
-target_link_libraries(frame_reader PRIVATE absl::status absl::statusor absl::strings avcodec avformat avutil)
+target_link_libraries(frame_reader
+    PRIVATE
+    absl::status
+    absl::statusor
+    absl::strings
+    avcodec
+    avformat
+    avutil
+    swscale
+)
 target_link_libraries(frame_reader PRIVATE frame util)
 
 add_library(engine_api SHARED engine_api.cc)
