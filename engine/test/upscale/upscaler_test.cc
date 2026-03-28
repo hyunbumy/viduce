@@ -50,11 +50,7 @@ TEST(UpscaleTest, CreatesNewFrame) {
       Frame::Create({.media_type = AVMEDIA_TYPE_VIDEO});
   ABSL_ASSERT_OK(input);
   AVFrame* frame = (*input)->frame();
-  // NOTE: We actually must use at least 32-byte input since sws_scale will
-  // automatically pad the output during conversion for SIMD alignment (usually
-  // 32-byte alignment according to
-  // https://stackoverflow.com/questions/31253485/how-do-you-resize-an-avframe/31270501#31270501)
-  frame->width = 32;
+  frame->width = 2;
   frame->height = 1;
   frame->format = AV_PIX_FMT_RGB24;
   std::vector<uint8_t> data(frame->width * frame->height * kRgbChannel, 123);
@@ -68,21 +64,18 @@ TEST(UpscaleTest, CreatesNewFrame) {
 
   EXPECT_THAT(res, absl_testing::IsOk());
   AVFrame* new_frame = (*res)->frame();
-  EXPECT_EQ(new_frame->width, 64);
+  EXPECT_EQ(new_frame->width, 4);
   EXPECT_EQ(new_frame->height, 2);
   EXPECT_EQ(new_frame->format, (int)AV_PIX_FMT_RGB24);
 
-  // linesize is the width of the video  * # of channels in bytes.
-  EXPECT_EQ(
-      new_frame->linesize[0],
-      av_image_get_linesize(AV_PIX_FMT_RGB24, new_frame->width, /*plane=*/0));
-  EXPECT_EQ(new_frame->linesize[0], new_frame->width * kRgbChannel);
-  int expected_output_size = (32 * 2) * (1 * 2) * kRgbChannel;
-  EXPECT_EQ(av_image_get_buffer_size(AV_PIX_FMT_RGB24, new_frame->width,
-                                     new_frame->height, /*stride=*/32),
-            expected_output_size);
-  for (int i = 0; i < expected_output_size; ++i) {
-    EXPECT_EQ(new_frame->data[0][i], 123);
+  // Check the data, being mindful of the stride / padding since AVFrame under
+  // the hood can change the underlying data layout for memory alignment:
+  // (https://stackoverflow.com/questions/31253485/how-do-you-resize-an-avframe/31270501#31270501)
+  for (int h = 0; h < new_frame->height; ++h) {
+    for (int w = 0; w < new_frame->width; ++w) {
+      int ind = w + h * new_frame->linesize[0];
+      EXPECT_EQ(new_frame->data[0][ind], 123);
+    }
   }
 }
 
