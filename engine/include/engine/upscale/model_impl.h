@@ -1,6 +1,6 @@
 #pragma once
 
-#include <string>
+#include <string_view>
 #include <vector>
 
 #include "absl/status/statusor.h"
@@ -12,7 +12,7 @@ namespace viduce::engine::upscale {
 
 class ModelImpl : public Model {
  public:
-  static absl::StatusOr<ModelImpl> Create(std::string model_path);
+  static absl::StatusOr<ModelImpl> Create(std::string_view model_path);
 
   Info getInfo() override;
 

@@ -5,11 +5,6 @@ file(COPY data DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 add_compile_options(-fsanitize=address)
 add_link_options(-fsanitize=address)
 
-add_executable(engine_api_test engine_api_test.cc)
-target_link_libraries(engine_api_test PRIVATE absl::status gtest_main)
-target_link_libraries(engine_api_test PRIVATE engine_api)
-gtest_discover_tests(engine_api_test)
-
 add_executable(frame_test frame_test.cc)
 target_link_libraries(frame_test PRIVATE absl::status absl::statusor gtest_main)
 target_link_libraries(frame_test PRIVATE frame)

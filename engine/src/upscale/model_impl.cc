@@ -1,6 +1,7 @@
 #include "engine/upscale/model_impl.h"
 
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "absl/status/statusor.h"
@@ -27,15 +28,16 @@ constexpr int kUpscale = 4;
 ModelImpl::ModelImpl(litert::Environment& env, litert::CompiledModel& model)
     : env_(std::move(env)), model_(std::move(model)) {}
 
-absl::StatusOr<ModelImpl> ModelImpl::Create(std::string model_path) {
+absl::StatusOr<ModelImpl> ModelImpl::Create(std::string_view model_path) {
   // Initialize LiteRT environment
   LITERT_ASSIGN_OR_RETURN(litert::Environment env,
                           litert::Environment::Create({}));
 
   // Compile the model for the CPU
-  LITERT_ASSIGN_OR_RETURN(litert::CompiledModel compiled_model,
-                          litert::CompiledModel::Create(
-                              env, model_path, litert::HwAccelerators::kCpu));
+  LITERT_ASSIGN_OR_RETURN(
+      litert::CompiledModel compiled_model,
+      litert::CompiledModel::Create(env, std::string(model_path),
+                                    litert::HwAccelerators::kCpu));
 
   return ModelImpl(env, compiled_model);
 }

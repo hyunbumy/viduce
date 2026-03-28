@@ -32,9 +32,21 @@ target_link_libraries(frame_reader PRIVATE frame util)
 
 add_library(engine_api SHARED engine_api.cc)
 target_include_directories(engine_api PUBLIC ../include)
-target_link_libraries(engine_api PRIVATE spdlog::spdlog absl::status absl::statusor avcodec avutil)
-target_link_libraries(engine_api PRIVATE frame_reader)
+target_link_libraries(engine_api
+    PRIVATE
+    absl::status
+    absl::statusor
+    avcodec
+    avutil
+    spdlog::spdlog
+)
+target_link_libraries(engine_api PRIVATE frame_reader model_impl upscaler)
 
 set_target_properties(engine_api PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
 )
+
+add_executable(demo demo.cc)
+target_link_libraries(demo PRIVATE engine_api)
+target_compile_options(demo PRIVATE -fsanitize=address)
+target_link_options(demo PRIVATE -fsanitize=address)

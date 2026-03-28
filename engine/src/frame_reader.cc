@@ -19,6 +19,8 @@ extern "C" {
 
 namespace {
 
+using ::viduce::engine::util::AvErrToStr;
+
 class Packet {
  public:
   Packet() { packet_ = av_packet_alloc(); }
