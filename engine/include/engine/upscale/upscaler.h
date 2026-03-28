@@ -18,10 +18,6 @@ class Upscaler {
   absl::StatusOr<std::unique_ptr<Frame>> Upscale(Frame* input_frame);
 
  private:
-  absl::StatusOr<Model::ModelIo> ToModelInput(Frame* input);
-  absl::StatusOr<std::unique_ptr<Frame>> FromModelOutput(
-      Frame* input, const Model::ModelIo& output);
-
   Model* model_;
 };
 
