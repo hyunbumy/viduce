@@ -35,7 +35,7 @@ COPY . .
 
 # Build cpp engine
 WORKDIR engine
-RUN cmake -B build -DCMAKE_BUILD_TYPE=${ENGINE_BUILD}
+RUN cmake -B build -DCMAKE_BUILD_TYPE=${ENGINE_BUILD} -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
 RUN cmake --build build -j8
 
 WORKDIR build
