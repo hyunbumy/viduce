@@ -72,6 +72,7 @@ absl::Status WriteToOutput(std::string_view output_dir, Frame* frame, int i) {
 
 // TODO: Migrate these functionalities into a separate class for better
 // testability
+// TODO: Always just copy the audio as-is without re-encoding
 absl::Status EnhanceVideoInternal(std::string_view input_path,
                                   std::string_view output_dir) {
   std::string_view model_path = std::getenv("VIDUCE_UPSCALER_PATH");
@@ -89,6 +90,7 @@ absl::Status EnhanceVideoInternal(std::string_view input_path,
 
   int i = 0;
   while (true) {
+    // TODO: Provide concurrency per stage by using multithreading + queues.
     absl::StatusOr<std::unique_ptr<viduce::engine::Frame>> frame =
         (*frame_reader)->ReadNextFrame();
     if (!frame.ok()) {
@@ -115,6 +117,7 @@ absl::Status EnhanceVideoInternal(std::string_view input_path,
       return upscaled.status();
     }
 
+    // TODO: Write output frames to a video.
     absl::Status write_st = WriteToOutput(output_dir, upscaled->get(), i++);
     if (!write_st.ok()) {
       return write_st;

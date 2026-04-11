@@ -6,7 +6,13 @@ add_compile_options(-fsanitize=address)
 add_link_options(-fsanitize=address)
 
 add_executable(frame_test frame_test.cc)
-target_link_libraries(frame_test PRIVATE absl::status absl::statusor gtest_main)
+target_link_libraries(frame_test
+    PRIVATE
+    absl::status
+    absl::status_matchers
+    absl::statusor
+    gtest_main
+)
 target_link_libraries(frame_test PRIVATE frame)
 gtest_discover_tests(frame_test)
 

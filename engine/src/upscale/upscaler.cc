@@ -55,8 +55,7 @@ absl::StatusOr<std::unique_ptr<Frame>> ConvertColor(
     return absl::InternalError("Failed to create SwsContext");
   }
 
-  absl::StatusOr<std::unique_ptr<Frame>> dst_frame =
-      Frame::Create(input->stream_info());
+  absl::StatusOr<std::unique_ptr<Frame>> dst_frame = Frame::Clone(input);
   if (!dst_frame.ok()) {
     return dst_frame.status();
   }
@@ -115,7 +114,7 @@ class Gbr24pConverter {
     AVFrame* input_avframe = input_frame->frame();
     // Convert pixels to a temp frame for sws_scale
     absl::StatusOr<std::unique_ptr<Frame>> temp_frame =
-        Frame::Create(input_frame->stream_info());
+        Frame::Clone(input_frame);
     if (!temp_frame.ok()) {
       return temp_frame.status();
     }

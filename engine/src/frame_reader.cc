@@ -22,18 +22,7 @@ namespace viduce::engine {
 
 namespace {
 
-class Packet {
- public:
-  Packet() { packet_ = av_packet_alloc(); }
-
-  ~Packet() { av_packet_free(&packet_); }
-
-  AVPacket* get_packet() { return packet_; }
-
- private:
-  // TODO: Figure out how to do static
-  AVPacket* packet_;
-};
+using ::viduce::engine::util::AvErrToStr;
 
 absl::StatusOr<AVFormatContext*> OpenInput(std::string_view url) {
   AVFormatContext* format_ctx = avformat_alloc_context();
@@ -83,6 +72,8 @@ absl::StatusOr<std::vector<AVCodecContext*>> GetCodecs(
     }
 
     avcodec_parameters_to_context(codec_ctx, codecpar);
+    // Explicitly set the timebase of the decoder to match the stream timebase
+    codec_ctx->time_base = format_ctx->streams[i]->time_base;
     avcodec_open2(codec_ctx, codec, nullptr);
     codecs.push_back(codec_ctx);
   }
@@ -133,16 +124,23 @@ absl::StatusOr<std::unique_ptr<FrameReader>> FrameReader::Create(
   }
 
   std::move(avformat_cleanup).Cancel();
+  AVPacket* packet = av_packet_alloc();
+  if (packet == nullptr) {
+    return absl::Status(
+        absl::StatusCode::kInternal,
+        absl::StrFormat("Failed to allocate packet for url: %s", url));
+  }
+
   return std::unique_ptr<FrameReader>(new FrameReader(
-      *format_ctx, std::move(*codecs), CreateMediaInfo(*format_ctx)));
+      *format_ctx, packet, std::move(*codecs), CreateMediaInfo(*format_ctx)));
 }
 
 FrameReader::~FrameReader() {
+  av_packet_free(&packet_);
   for (AVCodecContext* codec : codecs_) {
     avcodec_free_context(&codec);
   }
   avformat_close_input(&format_ctx_);
-  avformat_free_context(format_ctx_);
 }
 
 absl::StatusOr<std::unique_ptr<Frame>> FrameReader::ReadNextFrame() {
@@ -152,10 +150,10 @@ absl::StatusOr<std::unique_ptr<Frame>> FrameReader::ReadNextFrame() {
   // If input is being "streamed" in, then we must not block the thread:
   // https://stackoverflow.com/questions/23800615/ffmpeg-av-open-input-stream-in-latest-ffmpeg
   while (true) {
-    Packet packet;
-    AVPacket* av_packet = packet.get_packet();
+    av_packet_unref(packet_);
+
     // av_read_frame will return packets from any of the streams
-    int read_res = av_read_frame(format_ctx_, av_packet);
+    int read_res = av_read_frame(format_ctx_, packet_);
     // Keep reading even though EOF for flushing decoder.
     if (read_res != 0 && read_res != AVERROR_EOF) {
       return absl::Status(absl::StatusCode::kInternal,
@@ -163,8 +161,8 @@ absl::StatusOr<std::unique_ptr<Frame>> FrameReader::ReadNextFrame() {
                                           util::AvErrToStr(read_res)));
     }
 
-    AVCodecContext* codec = codecs_[av_packet->stream_index];
-    int packet_res = avcodec_send_packet(codec, av_packet);
+    AVCodecContext* codec = codecs_[packet_->stream_index];
+    int packet_res = avcodec_send_packet(codec, packet_);
     if (packet_res != 0 && packet_res != AVERROR_EOF) {
       return absl::Status(
           absl::StatusCode::kInternal,
@@ -174,7 +172,7 @@ absl::StatusOr<std::unique_ptr<Frame>> FrameReader::ReadNextFrame() {
     }
 
     absl::StatusOr<std::unique_ptr<Frame>> frame =
-        Frame::Create(media_info_.streams[av_packet->stream_index]);
+        Frame::Create(media_info_.streams[packet_->stream_index]);
     if (!frame.ok()) {
       return frame;
     }

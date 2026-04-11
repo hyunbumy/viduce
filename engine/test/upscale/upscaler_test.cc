@@ -69,6 +69,7 @@ TEST(UpscaleTest, CreatesNewFrame) {
   EXPECT_EQ(new_frame->width, 4);
   EXPECT_EQ(new_frame->height, 2);
   EXPECT_EQ(new_frame->format, (int)AV_PIX_FMT_RGB24);
+  EXPECT_EQ(new_frame->pkt_dts, frame->pkt_dts);
 
   // Check the data, being mindful of the stride / padding since AVFrame under
   // the hood can change the underlying data layout for memory alignment:
