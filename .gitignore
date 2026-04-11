@@ -5,3 +5,6 @@
 .vscode
 assets
 bin
+
+# AI
+.ai/plans
