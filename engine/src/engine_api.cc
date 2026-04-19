@@ -11,6 +11,7 @@
 #include "absl/status/statusor.h"
 #include "engine/frame.h"
 #include "engine/frame_reader.h"
+#include "engine/frame_writer.h"
 #include "engine/media_info.h"
 #include "engine/upscale/model.h"
 #include "engine/upscale/model_impl.h"
@@ -26,49 +27,12 @@ extern "C" {
 
 }  // extern "C"
 
+namespace viduce::engine {
+
 namespace {
 
-using ::viduce::engine::Frame;
 using ::viduce::engine::upscale::ModelImpl;
 using ::viduce::engine::upscale::Upscaler;
-
-absl::Status WriteToOutput(std::string_view output_dir, Frame* frame, int i) {
-  AVFrame* avframe = frame->frame();
-  int width = avframe->width;
-  int height = avframe->height;
-
-  SwsContext* sws_ctx = sws_getContext(
-      width, height, (AVPixelFormat)avframe->format, width, height,
-      AV_PIX_FMT_RGB24, SWS_BILINEAR, nullptr, nullptr, nullptr);
-
-  AVFrame* rgb_frame = av_frame_alloc();
-  rgb_frame->format = AV_PIX_FMT_RGB24;
-  rgb_frame->width = width;
-  rgb_frame->height = height;
-  av_frame_get_buffer(rgb_frame, 0);
-  sws_scale(sws_ctx, avframe->data, avframe->linesize, 0, height,
-            rgb_frame->data, rgb_frame->linesize);
-
-  // Write PPM File (P6 format: Binary RGB)
-  std::filesystem::path fname = std::filesystem::path(output_dir) /
-                                ("frame_" + std::to_string(i) + ".ppm");
-  std::ofstream file(fname);
-  if (!file) {
-    return absl::InternalError("error opening file");
-  }
-  file << "P6\n" << width << " " << height << "\n255\n";
-  for (int y = 0; y < height; y++) {
-    file.write((char*)(rgb_frame->data[0] + y * rgb_frame->linesize[0]),
-               width * 3);
-  }
-  file.close();
-
-  // TODO: Cleanup properly
-  av_frame_free(&rgb_frame);
-  sws_freeContext(sws_ctx);
-
-  return absl::OkStatus();
-}
 
 // TODO: Migrate these functionalities into a separate class for better
 // testability
@@ -82,10 +46,34 @@ absl::Status EnhanceVideoInternal(std::string_view input_path,
   }
   Upscaler upscaler(&(*model));
 
+  // TODO: Add a separate stage for reading the input file for info gathering
+  // such as duration, total num of streams, frames, etc.
   absl::StatusOr<std::unique_ptr<viduce::engine::FrameReader>> frame_reader =
       viduce::engine::FrameReader::Create(input_path);
   if (!frame_reader.ok()) {
     return frame_reader.status();
+  }
+
+  std::vector<StreamInfo> input_streams =
+      (*frame_reader)->media_info().streams;
+  for (StreamInfo& stream_info : input_streams) {
+    if (std::holds_alternative<VideoInfo>(stream_info.type_info)) {
+      // For now we just assume the output video stream has the same metadata
+      // except for the dimensions which are 4x upscaled. We will need to
+      // update this eventually once we support more dynamic metadata changes.
+      VideoInfo video_info = std::get<VideoInfo>(stream_info.type_info);
+      video_info.dim.width *= 4;
+      video_info.dim.height *= 4;
+      stream_info.type_info = video_info;
+    }
+  }
+  FrameWriter::InputParams input_params{.streams = input_streams};
+  std::string output_url = std::filesystem::path(output_dir) / "output.mp4";
+  FrameWriter::OutputParams output_params{.url = output_url};
+  absl::StatusOr<std::unique_ptr<FrameWriter>> frame_writer =
+      FrameWriter::Create(input_params, output_params);
+  if (!frame_writer.ok()) {
+    return frame_writer.status();
   }
 
   int i = 0;
@@ -117,11 +105,15 @@ absl::Status EnhanceVideoInternal(std::string_view input_path,
       return upscaled.status();
     }
 
-    // TODO: Write output frames to a video.
-    absl::Status write_st = WriteToOutput(output_dir, upscaled->get(), i++);
-    if (!write_st.ok()) {
-      return write_st;
+    absl::Status write_status = (*frame_writer)->Write(std::move(*upscaled));
+    if (!write_status.ok()) {
+      return write_status;
     }
+  }
+
+  absl::Status flush_status = (*frame_writer)->Flush();
+  if (!flush_status.ok()) {
+    return flush_status;
   }
 
   return absl::OkStatus();
@@ -129,13 +121,16 @@ absl::Status EnhanceVideoInternal(std::string_view input_path,
 
 }  // namespace
 
+}  // namespace viduce::engine
+
 int DecodeVideo(const char* input_path) {
   spdlog::error("deprecated");
   return absl::UnimplementedError("Deprecated").raw_code();
 }
 
 int EnhanceVideo(const char* input_path, const char* output_dir) {
-  absl::Status status = EnhanceVideoInternal(input_path, output_dir);
+  absl::Status status =
+      viduce::engine::EnhanceVideoInternal(input_path, output_dir);
   if (!status.ok()) {
     spdlog::error("EnhanceVideo failed: {}", status.message());
   }

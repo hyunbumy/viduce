@@ -19,6 +19,7 @@ struct VideoInfo {
   };
   Dimension dim = {};
 
+  AVPixelFormat pix_fmt = AV_PIX_FMT_NONE;
 };
 
 struct AudioInfo {};

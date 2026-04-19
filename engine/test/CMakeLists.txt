@@ -21,4 +21,14 @@ target_link_libraries(frame_reader_test PRIVATE absl::status absl::status_matche
 target_link_libraries(frame_reader_test PRIVATE frame frame_reader)
 gtest_discover_tests(frame_reader_test)
 
+add_executable(frame_writer_test frame_writer_test.cc)
+target_link_libraries(frame_writer_test
+    PRIVATE
+    absl::status
+    absl::status_matchers
+    gtest_main
+)
+target_link_libraries(frame_writer_test PRIVATE frame frame_writer)
+gtest_discover_tests(frame_writer_test)
+
 add_subdirectory(upscale)

@@ -37,9 +37,9 @@ TEST(CreateTest, Success) {
 }
 
 TEST(CloneTest, Success) {
-  Frame::StreamInfo stream_info{.stream_index = 1234,
-                                .media_type = AVMEDIA_TYPE_VIDEO,
-                                .codec_id = AV_CODEC_ID_H264};
+  StreamInfo stream_info{.stream_index = 1234,
+                          .codec_id = AV_CODEC_ID_H264,
+                          .type_info = VideoInfo{}};
   absl::StatusOr<std::unique_ptr<Frame>> frame = Frame::Create(stream_info);
   ABSL_ASSERT_OK(frame);
   AVFrame* avframe = (*frame)->frame();
@@ -51,9 +51,9 @@ TEST(CloneTest, Success) {
 
   EXPECT_TRUE(cloned_frame.ok());
   EXPECT_NE((*cloned_frame)->frame(), nullptr);
-  Frame::StreamInfo out_info = (*cloned_frame)->stream_info();
+  StreamInfo out_info = (*cloned_frame)->stream_info();
   EXPECT_EQ(out_info.stream_index, 1234);
-  EXPECT_EQ(out_info.media_type, AVMEDIA_TYPE_VIDEO);
+  EXPECT_TRUE(std::holds_alternative<VideoInfo>(out_info.type_info));
   EXPECT_EQ(out_info.codec_id, AV_CODEC_ID_H264);
   EXPECT_EQ((*cloned_frame)->frame()->pkt_dts, 1111);
   EXPECT_EQ((*cloned_frame)->frame()->pkt_duration, 2222);
