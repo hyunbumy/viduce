@@ -2,11 +2,20 @@
 
 #include <memory>
 #include <string_view>
+#include <variant>
 
 #include "absl/status/status.h"
 #include "absl/status/status_matchers.h"
 #include "engine/frame.h"
+#include "engine/media_info.h"
 #include "gtest/gtest.h"
+
+namespace {
+
+using ::viduce::engine::AudioInfo;
+using ::viduce::engine::MediaInfo;
+using ::viduce::engine::StreamInfo;
+using ::viduce::engine::VideoInfo;
 
 TEST(CreateTest, SuccessWithValidUrl) {
   std::string_view valid_url = "data/test.mp4";
@@ -26,6 +35,27 @@ TEST(CreateTest, FailWithInvalidUrl) {
 
   EXPECT_FALSE(frame_reader.ok());
   EXPECT_EQ(frame_reader.status().code(), absl::StatusCode::kInvalidArgument);
+}
+
+TEST(MediaInfoTest, PopulateMediaInfo) {
+  std::string_view valid_url = "data/test.mp4";
+  absl::StatusOr<std::unique_ptr<viduce::engine::FrameReader>> frame_reader =
+      viduce::engine::FrameReader::Create(valid_url);
+  ABSL_ASSERT_OK(frame_reader);
+
+  MediaInfo media_info = (*frame_reader)->media_info();
+
+  EXPECT_EQ(media_info.streams.size(), 2);
+  EXPECT_TRUE(std::any_of(media_info.streams.begin(), media_info.streams.end(),
+                          [](const StreamInfo& s) {
+                            return std::holds_alternative<VideoInfo>(
+                                s.type_info);
+                          }));
+  EXPECT_TRUE(std::any_of(media_info.streams.begin(), media_info.streams.end(),
+                          [](const StreamInfo& s) {
+                            return std::holds_alternative<AudioInfo>(
+                                s.type_info);
+                          }));
 }
 
 TEST(ReadNextFrameTest, ReturnsAllValidFrames) {
@@ -48,3 +78,5 @@ TEST(ReadNextFrameTest, ReturnsAllValidFrames) {
 
   EXPECT_EQ(num_frames, 3);
 }
+
+}  // namespace

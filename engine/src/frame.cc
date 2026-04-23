@@ -3,6 +3,7 @@
 #include <memory>
 
 #include "absl/status/statusor.h"
+#include "engine/media_info.h"
 
 extern "C" {
 #include <libavutil/avutil.h>

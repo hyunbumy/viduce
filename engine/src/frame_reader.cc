@@ -5,6 +5,7 @@
 #include <string_view>
 #include <vector>
 
+#include "absl/cleanup/cleanup.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
@@ -17,9 +18,9 @@ extern "C" {
 #include <libavutil/error.h>
 }  // extern "C"
 
-namespace {
+namespace viduce::engine {
 
-using ::viduce::engine::util::AvErrToStr;
+namespace {
 
 class Packet {
  public:
@@ -34,19 +35,31 @@ class Packet {
   AVPacket* packet_;
 };
 
-// Return all codec contexts for the streams in the resource.
-// The index of the codec corresponds to the stream index.
-absl::StatusOr<std::vector<AVCodecContext*>> GetCodecs(
-    AVFormatContext* format_ctx) {
+absl::StatusOr<AVFormatContext*> OpenInput(std::string_view url) {
+  AVFormatContext* format_ctx = avformat_alloc_context();
+  int open_res = avformat_open_input(&format_ctx, url.data(), nullptr, nullptr);
+  if (open_res != 0) {
+    return absl::Status(
+        absl::StatusCode::kInvalidArgument,
+        absl::StrFormat("Failed to open input video file %s with error: %s",
+                        url, util::AvErrToStr(open_res)));
+  }
   // Load stream info into format_ctx
   if (int res = avformat_find_stream_info(format_ctx, nullptr); res != 0) {
     return absl::Status(
         absl::StatusCode::kInternal,
         absl::StrFormat(
             "Failed to find stream info for video file %s with error: %s",
-            format_ctx->url, AvErrToStr(res)));
+            format_ctx->url, util::AvErrToStr(res)));
   }
 
+  return format_ctx;
+}
+
+// Return all codec contexts for the streams in the resource.
+// The index of the codec corresponds to the stream index.
+absl::StatusOr<std::vector<AVCodecContext*>> GetCodecs(
+    AVFormatContext* format_ctx) {
   // Build codec for each stream
   std::vector<AVCodecContext*> codecs;
   for (int i = 0; i < format_ctx->nb_streams; ++i) {
@@ -77,27 +90,51 @@ absl::StatusOr<std::vector<AVCodecContext*>> GetCodecs(
   return codecs;
 }
 
-}  // namespace
+MediaInfo CreateMediaInfo(const AVFormatContext* format_ctx) {
+  MediaInfo media_info;
+  for (int i = 0; i < format_ctx->nb_streams; ++i) {
+    AVStream* stream = format_ctx->streams[i];
+    StreamInfo stream_info;
+    stream_info.stream_index = stream->index;
+    stream_info.num_frames = stream->nb_frames;
+    stream_info.time_base = stream->time_base;
+    stream_info.duration = stream->duration;
+    stream_info.codec_id = stream->codecpar->codec_id;
 
-namespace viduce::engine {
+    if (stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
+      stream_info.type_info = VideoInfo{.dim.width = stream->codecpar->width,
+                                        .dim.height = stream->codecpar->height};
+    } else if (stream->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
+      stream_info.type_info = AudioInfo{};
+    }
+
+    media_info.streams.push_back(stream_info);
+  }
+
+  return media_info;
+}
+
+}  // namespace
 
 absl::StatusOr<std::unique_ptr<FrameReader>> FrameReader::Create(
     std::string_view url) {
-  AVFormatContext* format_ctx = avformat_alloc_context();
-  int open_res = avformat_open_input(&format_ctx, url.data(), nullptr, nullptr);
-  if (open_res != 0) {
-    return absl::Status(
-        absl::StatusCode::kInvalidArgument,
-        absl::StrFormat("Failed to open input video file %s with error: %s",
-                        url, AvErrToStr(open_res)));
+  absl::StatusOr<AVFormatContext*> format_ctx = OpenInput(url);
+  if (!format_ctx.ok()) {
+    return format_ctx.status();
   }
+  absl::Cleanup avformat_cleanup([&format_ctx] {
+    avformat_close_input(&*format_ctx);
+    avformat_free_context(*format_ctx);
+  });
 
-  absl::StatusOr<std::vector<AVCodecContext*>> codecs = GetCodecs(format_ctx);
+  absl::StatusOr<std::vector<AVCodecContext*>> codecs = GetCodecs(*format_ctx);
   if (!codecs.ok()) {
     return codecs.status();
   }
 
-  return std::unique_ptr<FrameReader>(new FrameReader(format_ctx, *codecs));
+  std::move(avformat_cleanup).Cancel();
+  return std::unique_ptr<FrameReader>(new FrameReader(
+      *format_ctx, std::move(*codecs), CreateMediaInfo(*format_ctx)));
 }
 
 FrameReader::~FrameReader() {
@@ -123,7 +160,7 @@ absl::StatusOr<std::unique_ptr<Frame>> FrameReader::ReadNextFrame() {
     if (read_res != 0 && read_res != AVERROR_EOF) {
       return absl::Status(absl::StatusCode::kInternal,
                           absl::StrFormat("Error reading frame with error: %s",
-                                          AvErrToStr(read_res)));
+                                          util::AvErrToStr(read_res)));
     }
 
     AVCodecContext* codec = codecs_[av_packet->stream_index];
@@ -133,14 +170,11 @@ absl::StatusOr<std::unique_ptr<Frame>> FrameReader::ReadNextFrame() {
           absl::StatusCode::kInternal,
           absl::StrFormat("Error sending packet for decoding with "
                           "error: %s",
-                          AvErrToStr(packet_res)));
+                          util::AvErrToStr(packet_res)));
     }
 
-    AVStream* stream = format_ctx_->streams[av_packet->stream_index];
-    Frame::StreamInfo stream_info{.stream_index = stream->index,
-                                  .media_type = stream->codecpar->codec_type,
-                                  .codec_id = stream->codecpar->codec_id};
-    absl::StatusOr<std::unique_ptr<Frame>> frame = Frame::Create(stream_info);
+    absl::StatusOr<std::unique_ptr<Frame>> frame =
+        Frame::Create(media_info_.streams[av_packet->stream_index]);
     if (!frame.ok()) {
       return frame;
     }
@@ -161,7 +195,7 @@ absl::StatusOr<std::unique_ptr<Frame>> FrameReader::ReadNextFrame() {
           absl::StatusCode::kInternal,
           absl::StrFormat("Error receiving frame for decoding with "
                           "error: %s",
-                          AvErrToStr(decode_res)));
+                          util::AvErrToStr(decode_res)));
     }
 
     return std::move(frame);

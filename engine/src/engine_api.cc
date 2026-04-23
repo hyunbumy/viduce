@@ -11,6 +11,7 @@
 #include "absl/status/statusor.h"
 #include "engine/frame.h"
 #include "engine/frame_reader.h"
+#include "engine/media_info.h"
 #include "engine/upscale/model.h"
 #include "engine/upscale/model_impl.h"
 #include "engine/upscale/upscaler.h"
@@ -72,7 +73,7 @@ absl::Status WriteToOutput(std::string_view output_dir, Frame* frame, int i) {
 // TODO: Migrate these functionalities into a separate class for better
 // testability
 absl::Status EnhanceVideoInternal(std::string_view input_path,
-                                 std::string_view output_dir) {
+                                  std::string_view output_dir) {
   std::string_view model_path = std::getenv("VIDUCE_UPSCALER_PATH");
   absl::StatusOr<ModelImpl> model = ModelImpl::Create(model_path);
   if (!model.ok()) {
@@ -99,13 +100,12 @@ absl::Status EnhanceVideoInternal(std::string_view input_path,
       break;
     }
 
-    viduce::engine::Frame::StreamInfo stream_info = (*frame)->stream_info();
+    viduce::engine::StreamInfo stream_info = (*frame)->stream_info();
     AVFrame* av_frame = (*frame)->frame();
     spdlog::info(
-        "Decoded frame info: res ({}x{}), stream_index: {}, media_type: {}, "
-        "codec_id: {}, pix_fmt: {}",
+        "Decoded frame info: res ({}x{}), stream_index: {}, codec_id: {}, "
+        "pix_fmt: {}",
         av_frame->width, av_frame->height, stream_info.stream_index,
-        av_get_media_type_string(stream_info.media_type),
         avcodec_get_name(stream_info.codec_id),
         av_get_pix_fmt_name(static_cast<AVPixelFormat>(av_frame->format)));
 

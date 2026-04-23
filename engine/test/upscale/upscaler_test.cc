@@ -6,6 +6,7 @@
 #include "absl/status/status.h"
 #include "absl/status/status_matchers.h"
 #include "engine/frame.h"
+#include "engine/media_info.h"
 #include "engine/upscale/model.h"
 #include "gtest/gtest.h"
 
@@ -17,6 +18,7 @@ extern "C" {
 namespace {
 
 using ::viduce::engine::Frame;
+using ::viduce::engine::VideoInfo;
 using ::viduce::engine::upscale::Model;
 using ::viduce::engine::upscale::Upscaler;
 
@@ -47,7 +49,7 @@ class MockModel : public Model {
 
 TEST(UpscaleTest, CreatesNewFrame) {
   absl::StatusOr<std::unique_ptr<Frame>> input =
-      Frame::Create({.media_type = AVMEDIA_TYPE_VIDEO});
+      Frame::Create({.type_info = VideoInfo{}});
   ABSL_ASSERT_OK(input);
   AVFrame* frame = (*input)->frame();
   frame->width = 2;
@@ -81,7 +83,7 @@ TEST(UpscaleTest, CreatesNewFrame) {
 
 TEST(UpscaleTest, ModelError) {
   absl::StatusOr<std::unique_ptr<Frame>> input =
-      Frame::Create({.media_type = AVMEDIA_TYPE_VIDEO});
+      Frame::Create({.type_info = VideoInfo{}});
   ABSL_ASSERT_OK(input);
   AVFrame* frame = (*input)->frame();
   frame->width = 2;

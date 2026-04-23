@@ -1,6 +1,7 @@
 #include "engine/upscale/upscaler.h"
 
 #include <memory>
+#include <variant>
 #include <vector>
 
 #include "absl/cleanup/cleanup.h"
@@ -26,7 +27,7 @@ absl::Status Validate(Frame* frame) {
     return absl::InvalidArgumentError("Input frame is null");
   }
 
-  if (frame->stream_info().media_type != AVMEDIA_TYPE_VIDEO) {
+  if (!std::holds_alternative<VideoInfo>(frame->stream_info().type_info)) {
     return absl::InvalidArgumentError("Input frame is not a video frame");
   }
 
@@ -54,7 +55,8 @@ absl::StatusOr<std::unique_ptr<Frame>> ConvertColor(
     return absl::InternalError("Failed to create SwsContext");
   }
 
-  absl::StatusOr<std::unique_ptr<Frame>> dst_frame = Frame::Create({});
+  absl::StatusOr<std::unique_ptr<Frame>> dst_frame =
+      Frame::Create(input->stream_info());
   if (!dst_frame.ok()) {
     return dst_frame.status();
   }
@@ -112,7 +114,12 @@ class Gbr24pConverter {
 
     AVFrame* input_avframe = input_frame->frame();
     // Convert pixels to a temp frame for sws_scale
-    absl::StatusOr<std::unique_ptr<Frame>> temp_frame = Frame::Create({});
+    absl::StatusOr<std::unique_ptr<Frame>> temp_frame =
+        Frame::Create(input_frame->stream_info());
+    if (!temp_frame.ok()) {
+      return temp_frame.status();
+    }
+
     AVFrame* temp_avframe = (*temp_frame)->frame();
     temp_avframe->format = conv_format_;
     temp_avframe->width = input_avframe->width * out_scale;
