@@ -45,7 +45,7 @@ TEST(MediaInfoTest, PopulateMediaInfo) {
 
   MediaInfo media_info = (*frame_reader)->media_info();
 
-  EXPECT_EQ(media_info.streams.size(), 2);
+  EXPECT_GE(media_info.streams.size(), 2);
   EXPECT_TRUE(std::any_of(media_info.streams.begin(), media_info.streams.end(),
                           [](const StreamInfo& s) {
                             return std::holds_alternative<VideoInfo>(

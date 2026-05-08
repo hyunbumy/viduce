@@ -1,62 +1,71 @@
 #include "engine/frame.h"
 
 #include <memory>
-#include <variant>
 
 #include "absl/status/status.h"
 #include "absl/status/status_matchers.h"
 #include "absl/status/statusor.h"
-#include "engine/frame_reader.h"
 #include "engine/media_info.h"
 #include "gtest/gtest.h"
 
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
+#include <libavutil/avutil.h>
+#include <libavutil/pixfmt.h>
 }  // extern "C"
 
 namespace {
 
 using ::viduce::engine::Frame;
-using ::viduce::engine::StreamInfo;
-using ::viduce::engine::VideoInfo;
+using ::viduce::engine::StreamIndex;
 
 TEST(CreateTest, Success) {
-  StreamInfo stream_info{.stream_index = 1234,
-                         .codec_id = AV_CODEC_ID_H264,
-                         .type_info = VideoInfo{}};
-
-  absl::StatusOr<std::unique_ptr<Frame>> frame = Frame::Create(stream_info);
+  absl::StatusOr<std::unique_ptr<Frame>> frame =
+      Frame::Create(StreamIndex{1234}, AVMEDIA_TYPE_VIDEO);
 
   EXPECT_TRUE(frame.ok());
   EXPECT_NE((*frame)->frame(), nullptr);
-  StreamInfo out_info = (*frame)->stream_info();
-  EXPECT_EQ(out_info.stream_index, 1234);
-  EXPECT_EQ(out_info.codec_id, AV_CODEC_ID_H264);
-  EXPECT_TRUE(std::holds_alternative<VideoInfo>(out_info.type_info));
+  EXPECT_EQ(static_cast<int>((*frame)->stream_index()), 1234);
+  EXPECT_EQ((*frame)->media_type(), AVMEDIA_TYPE_VIDEO);
 }
 
-TEST(CloneTest, Success) {
-  StreamInfo stream_info{.stream_index = 1234,
-                          .codec_id = AV_CODEC_ID_H264,
-                          .type_info = VideoInfo{}};
-  absl::StatusOr<std::unique_ptr<Frame>> frame = Frame::Create(stream_info);
+TEST(CloneTest, CopiesStreamIndexAndMediaType) {
+  absl::StatusOr<std::unique_ptr<Frame>> frame =
+      Frame::Create(StreamIndex{1234}, AVMEDIA_TYPE_VIDEO);
+  ABSL_ASSERT_OK(frame);
+
+  absl::StatusOr<std::unique_ptr<Frame>> cloned = Frame::Clone(frame->get());
+
+  EXPECT_TRUE(cloned.ok());
+  EXPECT_EQ(static_cast<int>((*cloned)->stream_index()), 1234);
+  EXPECT_EQ((*cloned)->media_type(), AVMEDIA_TYPE_VIDEO);
+}
+
+TEST(CloneTest, CopiesAvFramePropsButNotGeometry) {
+  // Lock in the documented contract: av_frame_copy_props carries pts/duration
+  // and color metadata, but width/height/format/linesize are NOT carried.
+  absl::StatusOr<std::unique_ptr<Frame>> frame =
+      Frame::Create(StreamIndex{0}, AVMEDIA_TYPE_VIDEO);
   ABSL_ASSERT_OK(frame);
   AVFrame* avframe = (*frame)->frame();
+  avframe->pts = 42;
   avframe->pkt_dts = 1111;
   avframe->pkt_duration = 2222;
+  avframe->width = 64;
+  avframe->height = 48;
+  avframe->format = AV_PIX_FMT_YUV420P;
 
-  absl::StatusOr<std::unique_ptr<Frame>> cloned_frame =
-      Frame::Clone(frame->get());
+  absl::StatusOr<std::unique_ptr<Frame>> cloned = Frame::Clone(frame->get());
+  ABSL_ASSERT_OK(cloned);
+  AVFrame* cloned_avframe = (*cloned)->frame();
 
-  EXPECT_TRUE(cloned_frame.ok());
-  EXPECT_NE((*cloned_frame)->frame(), nullptr);
-  StreamInfo out_info = (*cloned_frame)->stream_info();
-  EXPECT_EQ(out_info.stream_index, 1234);
-  EXPECT_TRUE(std::holds_alternative<VideoInfo>(out_info.type_info));
-  EXPECT_EQ(out_info.codec_id, AV_CODEC_ID_H264);
-  EXPECT_EQ((*cloned_frame)->frame()->pkt_dts, 1111);
-  EXPECT_EQ((*cloned_frame)->frame()->pkt_duration, 2222);
+  EXPECT_EQ(cloned_avframe->pts, 42);
+  EXPECT_EQ(cloned_avframe->pkt_dts, 1111);
+  EXPECT_EQ(cloned_avframe->pkt_duration, 2222);
+  EXPECT_EQ(cloned_avframe->width, 0);
+  EXPECT_EQ(cloned_avframe->height, 0);
+  EXPECT_EQ(cloned_avframe->format, AV_PIX_FMT_NONE);
 }
 
 }  // namespace

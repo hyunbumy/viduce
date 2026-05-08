@@ -74,7 +74,14 @@ absl::StatusOr<std::vector<AVCodecContext*>> GetCodecs(
     avcodec_parameters_to_context(codec_ctx, codecpar);
     // Propagate the timebase from stream to codec context
     codec_ctx->pkt_timebase = format_ctx->streams[i]->time_base;
-    avcodec_open2(codec_ctx, codec, nullptr);
+    if (int open_res = avcodec_open2(codec_ctx, codec, nullptr); open_res < 0) {
+      avcodec_free_context(&codec_ctx);
+      return absl::Status(
+          absl::StatusCode::kInternal,
+          absl::StrFormat("Failed to open codec for url: %s, streamID: %d "
+                          "with error: %s",
+                          format_ctx->url, i, AvErrToStr(open_res)));
+    }
     codecs.push_back(codec_ctx);
   }
 
@@ -86,7 +93,7 @@ MediaInfo CreateMediaInfo(const AVFormatContext* format_ctx) {
   for (int i = 0; i < format_ctx->nb_streams; ++i) {
     AVStream* stream = format_ctx->streams[i];
     StreamInfo stream_info;
-    stream_info.stream_index = stream->index;
+    stream_info.stream_index = StreamIndex{stream->index};
     stream_info.num_frames = stream->nb_frames;
     stream_info.time_base = stream->time_base;
     stream_info.duration = stream->duration;
@@ -172,6 +179,15 @@ absl::StatusOr<std::unique_ptr<Frame>> FrameReader::ReadNextFrame() {
                                           util::AvErrToStr(read_res)));
     }
 
+    if (packet_->stream_index < 0 ||
+        static_cast<size_t>(packet_->stream_index) >= codecs_.size()) {
+      return absl::Status(
+          absl::StatusCode::kInternal,
+          absl::StrFormat(
+              "Packet has out-of-range stream_index: %d (have %d streams)",
+              packet_->stream_index, codecs_.size()));
+    }
+
     AVCodecContext* codec = codecs_[packet_->stream_index];
     int packet_res = avcodec_send_packet(codec, packet_);
     if (packet_res != 0 && packet_res != AVERROR_EOF) {
@@ -183,7 +199,9 @@ absl::StatusOr<std::unique_ptr<Frame>> FrameReader::ReadNextFrame() {
     }
 
     absl::StatusOr<std::unique_ptr<Frame>> frame =
-        Frame::Create(media_info_.streams[packet_->stream_index]);
+        Frame::Create(StreamIndex{packet_->stream_index},
+                      format_ctx_->streams[packet_->stream_index]
+                          ->codecpar->codec_type);
     if (!frame.ok()) {
       return frame;
     }

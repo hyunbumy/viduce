@@ -18,8 +18,7 @@ extern "C" {
 namespace {
 
 using ::viduce::engine::Frame;
-using ::viduce::engine::StreamInfo;
-using ::viduce::engine::VideoInfo;
+using ::viduce::engine::StreamIndex;
 using ::viduce::engine::upscale::Model;
 using ::viduce::engine::upscale::Upscaler;
 
@@ -50,7 +49,7 @@ class MockModel : public Model {
 
 TEST(UpscaleTest, CreatesNewFrame) {
   absl::StatusOr<std::unique_ptr<Frame>> input =
-      Frame::Create({.type_info = VideoInfo{}});
+      Frame::Create(StreamIndex{0}, AVMEDIA_TYPE_VIDEO);
   ABSL_ASSERT_OK(input);
   AVFrame* frame = (*input)->frame();
   frame->width = 2;
@@ -66,8 +65,8 @@ TEST(UpscaleTest, CreatesNewFrame) {
   absl::StatusOr<std::unique_ptr<Frame>> res = upscaler.Upscale(input->get());
 
   EXPECT_THAT(res, absl_testing::IsOk());
-  StreamInfo out_info = (*res)->stream_info();
-  EXPECT_TRUE(std::holds_alternative<VideoInfo>(out_info.type_info));
+  EXPECT_EQ(static_cast<int>((*res)->stream_index()), 0);
+  EXPECT_EQ((*res)->media_type(), AVMEDIA_TYPE_VIDEO);
   AVFrame* new_frame = (*res)->frame();
   EXPECT_EQ(new_frame->width, 4);
   EXPECT_EQ(new_frame->height, 2);
@@ -85,9 +84,23 @@ TEST(UpscaleTest, CreatesNewFrame) {
   }
 }
 
+TEST(UpscaleTest, RejectsNonVideoFrame) {
+  absl::StatusOr<std::unique_ptr<Frame>> input =
+      Frame::Create(StreamIndex{0}, AVMEDIA_TYPE_AUDIO);
+  ABSL_ASSERT_OK(input);
+
+  MockModel model;
+  Upscaler upscaler(&model);
+  absl::StatusOr<std::unique_ptr<Frame>> res = upscaler.Upscale(input->get());
+
+  EXPECT_THAT(res,
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument,
+                                     testing::HasSubstr("not a video frame")));
+}
+
 TEST(UpscaleTest, ModelError) {
   absl::StatusOr<std::unique_ptr<Frame>> input =
-      Frame::Create({.type_info = VideoInfo{}});
+      Frame::Create(StreamIndex{0}, AVMEDIA_TYPE_VIDEO);
   ABSL_ASSERT_OK(input);
   AVFrame* frame = (*input)->frame();
   frame->width = 2;

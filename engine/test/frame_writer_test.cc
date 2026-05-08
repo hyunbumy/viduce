@@ -1,5 +1,6 @@
 #include "engine/frame_writer.h"
 
+#include <filesystem>
 #include <memory>
 #include <string>
 
@@ -32,7 +33,7 @@ using ::viduce::engine::VideoInfo;
 
 StreamInfo MakeVideoStreamInfo(int stream_index, int width, int height) {
   return StreamInfo{
-      .stream_index = stream_index,
+      .stream_index = ::viduce::engine::StreamIndex{stream_index},
       .num_frames = 30,
       .codec_id = AV_CODEC_ID_H264,
       .time_base = AVRational{1, 30},
@@ -42,8 +43,12 @@ StreamInfo MakeVideoStreamInfo(int stream_index, int width, int height) {
   };
 }
 
+std::string TempOutputUrl(std::string_view filename) {
+  return std::filesystem::path(::testing::TempDir()) / filename;
+}
+
 TEST(CreateTest, Success) {
-  std::string valid_url = "output.mp4";
+  std::string valid_url = TempOutputUrl("create_test.mp4");
   StreamInfo stream_info = MakeVideoStreamInfo(/*stream_index=*/0,
                                                /*width=*/64, /*height=*/64);
 
@@ -55,14 +60,15 @@ TEST(CreateTest, Success) {
 }
 
 TEST(WriteTest, Success) {
-  std::string valid_url = "output.mp4";
+  std::string valid_url = TempOutputUrl("write_test.mp4");
   StreamInfo stream_info = MakeVideoStreamInfo(/*stream_index=*/0,
                                                /*width=*/64, /*height=*/64);
   absl::StatusOr<std::unique_ptr<FrameWriter>> frame_writer =
       FrameWriter::Create({.streams = {stream_info}}, {.url = valid_url});
   ABSL_ASSERT_OK(frame_writer);
 
-  absl::StatusOr<std::unique_ptr<Frame>> frame = Frame::Create(stream_info);
+  absl::StatusOr<std::unique_ptr<Frame>> frame =
+      Frame::Create(stream_info.stream_index, AVMEDIA_TYPE_VIDEO);
   ABSL_ASSERT_OK(frame);
   AVFrame* av_frame = (*frame)->frame();
   av_frame->format = AV_PIX_FMT_YUV420P;

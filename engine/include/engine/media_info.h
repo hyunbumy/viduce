@@ -11,6 +11,12 @@ extern "C" {
 
 namespace viduce::engine {
 
+// Strongly-typed alias for stream indices. Prevents accidental mixing with
+// arbitrary ints (e.g., array sizes, codec IDs). Convert with static_cast or
+// brace-init: `StreamIndex{packet->stream_index}` /
+// `static_cast<int>(stream_index)`.
+enum class StreamIndex : int {};
+
 struct VideoInfo {
   // Video dimension in pixels
   struct Dimension {
@@ -25,7 +31,7 @@ struct VideoInfo {
 struct AudioInfo {};
 
 struct StreamInfo {
-  int stream_index = -1;
+  StreamIndex stream_index = StreamIndex{-1};
   int64_t num_frames = 0;
 
   AVCodecID codec_id = AV_CODEC_ID_NONE;
@@ -38,7 +44,11 @@ struct StreamInfo {
 };
 
 struct MediaInfo {
-  // Ordered by their StreamInfo.stream_index
+  // Ordered by their StreamInfo.stream_index — i.e., callers rely on
+  // streams[i].stream_index == StreamIndex{i}.
+  // TODO: Refactor to std::unordered_map<StreamIndex, StreamInfo> so the
+  // index-to-stream relationship is explicit at the type level instead of
+  // depending on vector ordering.
   std::vector<StreamInfo> streams = {};
 };
 
