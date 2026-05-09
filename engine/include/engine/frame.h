@@ -3,6 +3,7 @@
 #include <memory>
 
 #include "absl/status/statusor.h"
+#include "engine/media_info.h"
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -13,13 +14,6 @@ namespace viduce::engine {
 
 class Frame {
  public:
-  // Extra information about the stream that the frame belongs to.
-  struct StreamInfo {
-    int stream_index = -1;
-    AVMediaType media_type = AVMEDIA_TYPE_UNKNOWN;
-    AVCodecID codec_id = AV_CODEC_ID_NONE;
-  };
-
   static absl::StatusOr<std::unique_ptr<Frame>> Create(
       const StreamInfo& stream_info);
 
@@ -27,6 +21,7 @@ class Frame {
 
   AVFrame* frame() { return frame_; }
 
+  // The original stream info that this frame was decoded from.
   const StreamInfo& stream_info() const { return stream_info_; }
 
  private:
