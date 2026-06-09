@@ -1,0 +1,32 @@
+# Brings up the local MoQ relay and the broadcast web app together.
+#
+#   podman compose up --build      (or: docker compose up --build)
+#
+# Then open http://127.0.0.1:45173 in a Chromium-based browser. The preview starts
+# automatically; click "Start broadcast" to publish to the relay.
+#
+# Note: the browser (not a container) connects to the relay over the published host
+# ports, so the two services don't share a compose network — each just publishes to
+# the host. Host ports are deliberately obscure to avoid conflicts; in the app's
+# Relay URL field use http://127.0.0.1:44443.
+services:
+  relay:
+    build: ./viduce-relay
+    image: viduce-relay
+    container_name: viduce-relay
+    ports:
+      # host:container — host side is deliberately obscure to avoid conflicts.
+      - "44443:4443/udp" # QUIC / WebTransport
+      - "44443:4443/tcp" # cert fingerprint (certificate.sha256) + HTTP/WS fallback
+
+  web:
+    build: ./viduce-broadcast/web
+    image: viduce-broadcast-web
+    container_name: viduce-broadcast-web
+    ports:
+      - "45173:5173" # Vite dev server (host 45173 -> container 5173)
+    volumes:
+      - ./viduce-broadcast/web:/app # live-mount source for hot reload
+      - /app/node_modules # anonymous volume keeps the image's deps under the mount
+    depends_on:
+      - relay
