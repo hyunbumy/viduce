@@ -1,0 +1,3 @@
+# Runtime-generated files (defensive — the current config writes none).
+iroh-secret.key
+*.srl

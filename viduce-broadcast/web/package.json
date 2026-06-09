@@ -1,9 +1,9 @@
 {
-  "name": "viduce-streamer",
+  "name": "viduce-broadcast-web",
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "Web-based MoQ streamer: webcam -> 240x240 -> MoQ relay",
+  "description": "Web-based MoQ broadcaster: webcam -> 240x240 -> MoQ relay",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
