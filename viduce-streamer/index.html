@@ -4,10 +4,67 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Viduce Streamer</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: system-ui, sans-serif;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1rem;
+        padding: 2rem 1rem;
+        background: #15171c;
+        color: #e8eaed;
+      }
+      header { text-align: center; }
+      header p { margin: 0.25rem 0 0; color: #9aa0a6; font-size: 0.9rem; }
+      #preview {
+        width: 320px;
+        height: 240px;
+        background: #000;
+        border: 1px solid #303236;
+        border-radius: 8px;
+        object-fit: contain;
+      }
+      .controls { display: flex; gap: 0.75rem; }
+      button {
+        padding: 0.5rem 1.25rem;
+        font-size: 1rem;
+        border: 1px solid #3c4043;
+        border-radius: 6px;
+        background: #2a2d31;
+        color: #e8eaed;
+        cursor: pointer;
+      }
+      button:hover:not(:disabled) { background: #34373b; }
+      button:disabled { opacity: 0.45; cursor: not-allowed; }
+      #status {
+        min-height: 1.25rem;
+        font-size: 0.9rem;
+        color: #9aa0a6;
+      }
+      #status.error { color: #f28b82; }
+    </style>
   </head>
   <body>
-    <h1>Viduce Streamer</h1>
-    <p>Webcam &rarr; 240&times;240 &rarr; MoQ relay</p>
+    <header>
+      <h1>Viduce Streamer</h1>
+      <p>Webcam &rarr; 240&times;240 &rarr; MoQ relay</p>
+    </header>
+
+    <video id="preview" muted autoplay playsinline></video>
+
+    <div class="controls">
+      <button id="start">Start camera</button>
+      <button id="stop" disabled>Stop</button>
+    </div>
+
+    <div id="status" role="status" aria-live="polite">Idle</div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
