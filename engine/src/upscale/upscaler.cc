@@ -1,7 +1,6 @@
 #include "engine/upscale/upscaler.h"
 
 #include <memory>
-#include <variant>
 #include <vector>
 
 #include "absl/cleanup/cleanup.h"
@@ -26,8 +25,7 @@ absl::Status Validate(Frame* frame) {
   if (frame == nullptr) {
     return absl::InvalidArgumentError("Input frame is null");
   }
-
-  if (!std::holds_alternative<VideoInfo>(frame->stream_info().type_info)) {
+  if (frame->media_type() != AVMEDIA_TYPE_VIDEO) {
     return absl::InvalidArgumentError("Input frame is not a video frame");
   }
 

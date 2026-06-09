@@ -39,17 +39,22 @@ using ::viduce::engine::upscale::Upscaler;
 // TODO: Always just copy the audio as-is without re-encoding
 absl::Status EnhanceVideoInternal(std::string_view input_path,
                                   std::string_view output_dir) {
-  std::string_view model_path = std::getenv("VIDUCE_UPSCALER_PATH");
+  const char* model_path = std::getenv("VIDUCE_UPSCALER_PATH");
+  if (model_path == nullptr) {
+    return absl::FailedPreconditionError(
+        "VIDUCE_UPSCALER_PATH environment variable is not set");
+  }
   absl::StatusOr<ModelImpl> model = ModelImpl::Create(model_path);
   if (!model.ok()) {
     return model.status();
   }
+  const int upscale_factor = model->getInfo().scale;
   Upscaler upscaler(&(*model));
 
   // TODO: Add a separate stage for reading the input file for info gathering
   // such as duration, total num of streams, frames, etc.
-  absl::StatusOr<std::unique_ptr<viduce::engine::FrameReader>> frame_reader =
-      viduce::engine::FrameReader::Create(input_path);
+  absl::StatusOr<std::unique_ptr<FrameReader>> frame_reader =
+      FrameReader::Create(input_path);
   if (!frame_reader.ok()) {
     return frame_reader.status();
   }
@@ -59,11 +64,11 @@ absl::Status EnhanceVideoInternal(std::string_view input_path,
   for (StreamInfo& stream_info : input_streams) {
     if (std::holds_alternative<VideoInfo>(stream_info.type_info)) {
       // For now we just assume the output video stream has the same metadata
-      // except for the dimensions which are 4x upscaled. We will need to
-      // update this eventually once we support more dynamic metadata changes.
+      // except for upscaled dimensions. We will need to update this eventually
+      // once we support more dynamic metadata changes.
       VideoInfo video_info = std::get<VideoInfo>(stream_info.type_info);
-      video_info.dim.width *= 4;
-      video_info.dim.height *= 4;
+      video_info.dim.width *= upscale_factor;
+      video_info.dim.height *= upscale_factor;
       stream_info.type_info = video_info;
     }
   }
@@ -79,7 +84,7 @@ absl::Status EnhanceVideoInternal(std::string_view input_path,
   int i = 0;
   while (true) {
     // TODO: Provide concurrency per stage by using multithreading + queues.
-    absl::StatusOr<std::unique_ptr<viduce::engine::Frame>> frame =
+    absl::StatusOr<std::unique_ptr<Frame>> frame =
         (*frame_reader)->ReadNextFrame();
     if (!frame.ok()) {
       return frame.status();
@@ -90,16 +95,23 @@ absl::Status EnhanceVideoInternal(std::string_view input_path,
       break;
     }
 
-    viduce::engine::StreamInfo stream_info = (*frame)->stream_info();
+    StreamIndex stream_index = (*frame)->stream_index();
     AVFrame* av_frame = (*frame)->frame();
+    // Look up the source codec from the reader's MediaInfo. The reader
+    // bounds-checks stream_index before tagging frames with it, so direct
+    // indexing here is safe.
+    AVCodecID codec_id = (*frame_reader)
+                             ->media_info()
+                             .streams[static_cast<int>(stream_index)]
+                             .codec_id;
     spdlog::info(
         "Decoded frame info: res ({}x{}), stream_index: {}, codec_id: {}, "
         "pix_fmt: {}",
-        av_frame->width, av_frame->height, stream_info.stream_index,
-        avcodec_get_name(stream_info.codec_id),
+        av_frame->width, av_frame->height, static_cast<int>(stream_index),
+        avcodec_get_name(codec_id),
         av_get_pix_fmt_name(static_cast<AVPixelFormat>(av_frame->format)));
 
-    absl::StatusOr<std::unique_ptr<viduce::engine::Frame>> upscaled =
+    absl::StatusOr<std::unique_ptr<Frame>> upscaled =
         upscaler.Upscale(frame->get());
     if (!upscaled.ok()) {
       return upscaled.status();

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <memory>
-#include <string_view>
 #include <unordered_map>
 
 #include "absl/status/status.h"
@@ -14,8 +13,6 @@ extern "C" {
 }  // extern "C"
 
 namespace viduce::engine {
-
-using StreamIndex = int;
 
 class FrameWriter {
  public:
@@ -43,7 +40,8 @@ class FrameWriter {
   // flushed into the output video yet until Flush is called.
   absl::Status Write(std::unique_ptr<Frame> frame);
 
-  // Flushes all the frames into an output video.
+  // Flushes all the frames into an output video. Must be called exactly once
+  // per FrameWriter instance; calling it again is undefined.
   absl::Status Flush();
 
  private:

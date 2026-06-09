@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <variant>
 
+#include "absl/cleanup/cleanup.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "engine/frame.h"
@@ -29,7 +30,7 @@ absl::StatusOr<AVFormatContext*> CreateFormatCtx(std::string_view url) {
   AVFormatContext* format_ctx;
   int avformat_res =
       avformat_alloc_output_context2(&format_ctx, nullptr, nullptr, url.data());
-  if (avformat_res != 0) {
+  if (avformat_res < 0) {
     return absl::Status(
         absl::StatusCode::kInternal,
         absl::StrFormat(
@@ -43,7 +44,7 @@ absl::StatusOr<AVFormatContext*> CreateFormatCtx(std::string_view url) {
 
   int open_res = avio_open2(&format_ctx->pb, url.data(), AVIO_FLAG_WRITE,
                             /*int_cb=*/nullptr, /*options=*/nullptr);
-  if (open_res != 0) {
+  if (open_res < 0) {
     return absl::Status(absl::StatusCode::kInternal,
                         absl::StrFormat("Failed to open url: %s with error: %s",
                                         url, AvErrToStr(open_res)));
@@ -70,6 +71,8 @@ absl::StatusOr<FrameWriter::EncoderInfo> CreateVideoEncoderInfo(
         absl::StrFormat("Failed to allocate codec context for encoder: %s",
                         codec_name));
   }
+  absl::Cleanup encoder_ctx_cleanup(
+      [&encoder_ctx] { avcodec_free_context(&encoder_ctx); });
 
   VideoInfo video_info = std::get<VideoInfo>(incoming_stream.type_info);
   encoder_ctx->height = video_info.dim.height;
@@ -85,6 +88,11 @@ absl::StatusOr<FrameWriter::EncoderInfo> CreateVideoEncoderInfo(
   // Set timebase of the encoder to be the same as the decoder to avoid needing
   // to convert timebase during encoding.
   encoder_ctx->time_base = incoming_stream.time_base;
+  // TODO: This derives framerate from num_frames/duration, which divides by
+  // zero (or produces nonsense) when the demuxer doesn't populate duration or
+  // num_frames (live streams, fragmented MP4, etc.). Address once we support
+  // target fps / target duration as planned in the Create() TODO above —
+  // ideally by plumbing avg_frame_rate through StreamInfo.
   AVRational frame_rate;
   av_reduce(&frame_rate.num, &frame_rate.den,
             incoming_stream.num_frames * incoming_stream.time_base.den,
@@ -94,7 +102,7 @@ absl::StatusOr<FrameWriter::EncoderInfo> CreateVideoEncoderInfo(
 
   // Initialize encoder context
   int open_res = avcodec_open2(encoder_ctx, encoder, nullptr);
-  if (open_res != 0) {
+  if (open_res < 0) {
     return absl::Status(
         absl::StatusCode::kInternal,
         absl::StrFormat("Failed to open encoder %s with error: %s", codec_name,
@@ -106,7 +114,7 @@ absl::StatusOr<FrameWriter::EncoderInfo> CreateVideoEncoderInfo(
     return absl::Status(
         absl::StatusCode::kInternal,
         absl::StrFormat("Failed to create new stream for stream index: %d",
-                        incoming_stream.stream_index));
+                        static_cast<int>(incoming_stream.stream_index)));
   }
   // Set the same time_base for stream for now; we would need to update this
   // eventually once the framerate changes.
@@ -116,15 +124,17 @@ absl::StatusOr<FrameWriter::EncoderInfo> CreateVideoEncoderInfo(
   // Copy the encoder parameters to the stream
   int param_res =
       avcodec_parameters_from_context(stream->codecpar, encoder_ctx);
-  if (param_res != 0) {
+  if (param_res < 0) {
     return absl::Status(
         absl::StatusCode::kInternal,
         absl::StrFormat(
             "Failed to copy encoder parameters to stream for stream index: %d "
             "with error: %s",
-            incoming_stream.stream_index, AvErrToStr(param_res)));
+            static_cast<int>(incoming_stream.stream_index),
+            AvErrToStr(param_res)));
   }
 
+  std::move(encoder_ctx_cleanup).Cancel();
   return FrameWriter::EncoderInfo{.encoding_stream = stream,
                                   .encoder_ctx = encoder_ctx};
 }
@@ -170,8 +180,17 @@ absl::StatusOr<std::unique_ptr<FrameWriter>> FrameWriter::Create(
   if (!format_ctx.ok()) {
     return format_ctx.status();
   }
+  absl::Cleanup format_ctx_cleanup([&format_ctx] {
+    avio_closep(&(*format_ctx)->pb);
+    avformat_free_context(*format_ctx);
+  });
 
   std::unordered_map<StreamIndex, EncoderInfo> encoders;
+  absl::Cleanup encoders_cleanup([&encoders] {
+    for (auto& [_, info] : encoders) {
+      avcodec_free_context(&info.encoder_ctx);
+    }
+  });
   for (const StreamInfo& stream_info : input_params.streams) {
     absl::StatusOr<EncoderInfo> encoder_info =
         CreateEncoderInfo(stream_info, *format_ctx);
@@ -181,7 +200,7 @@ absl::StatusOr<std::unique_ptr<FrameWriter>> FrameWriter::Create(
     encoders[stream_info.stream_index] = *encoder_info;
   }
 
-  if (int res = avformat_write_header(*format_ctx, nullptr); res != 0) {
+  if (int res = avformat_write_header(*format_ctx, nullptr); res < 0) {
     return absl::Status(
         absl::StatusCode::kInternal,
         absl::StrFormat("Failed to write header for url: %s with error: %s",
@@ -195,6 +214,8 @@ absl::StatusOr<std::unique_ptr<FrameWriter>> FrameWriter::Create(
                                         output_params.url));
   }
 
+  std::move(format_ctx_cleanup).Cancel();
+  std::move(encoders_cleanup).Cancel();
   return std::unique_ptr<FrameWriter>(
       new FrameWriter(*format_ctx, packet, encoders));
 }
@@ -202,7 +223,7 @@ absl::StatusOr<std::unique_ptr<FrameWriter>> FrameWriter::Create(
 FrameWriter::FrameWriter(
     AVFormatContext* fmt_ctx, AVPacket* packet,
     const std::unordered_map<StreamIndex, EncoderInfo>& encoders)
-    : format_ctx_(fmt_ctx), packet_(packet), encoders_(encoders) {}
+    : format_ctx_(fmt_ctx), encoders_(encoders), packet_(packet) {}
 
 FrameWriter::~FrameWriter() {
   av_packet_free(&packet_);
@@ -214,9 +235,14 @@ FrameWriter::~FrameWriter() {
 }
 
 absl::Status FrameWriter::Write(std::unique_ptr<Frame> frame) {
-  StreamInfo stream_info = frame->stream_info();
+  StreamIndex stream_index = frame->stream_index();
+  if (encoders_.find(stream_index) == encoders_.end()) {
+    return absl::NotFoundError(
+        absl::StrFormat("No encoder configured for stream index: %d",
+                        static_cast<int>(stream_index)));
+  }
   // Do the actual encoding
-  return EncodeFrame(stream_info.stream_index, frame->frame());
+  return EncodeFrame(stream_index, frame->frame());
 }
 
 absl::Status FrameWriter::Flush() {
@@ -228,7 +254,7 @@ absl::Status FrameWriter::Flush() {
   }
 
   int write_res = av_write_trailer(format_ctx_);
-  if (write_res != 0) {
+  if (write_res < 0) {
     return absl::Status(
         absl::StatusCode::kInternal,
         absl::StrFormat("Failed to write trailer with error: %s",
@@ -248,12 +274,13 @@ absl::Status FrameWriter::EncodeFrame(StreamIndex stream_index,
   // alternatively though, I could just set the encoder's timebase to match the
   // decoder's timebase and avoid the need for conversion.
   int frame_result = avcodec_send_frame(encoder, frame);
-  if (frame_result != 0) {
+  if (frame_result < 0) {
     return absl::Status(
         absl::StatusCode::kInternal,
         absl::StrFormat("Error sending frame for encoding with error: %s for "
                         "stream index: %d",
-                        AvErrToStr(frame_result), stream_index));
+                        AvErrToStr(frame_result),
+                        static_cast<int>(stream_index)));
   }
 
   while (true) {
@@ -265,17 +292,17 @@ absl::Status FrameWriter::EncodeFrame(StreamIndex stream_index,
       return absl::OkStatus();
     }
 
-    if (packet_result != 0) {
+    if (packet_result < 0) {
       return absl::Status(
           absl::StatusCode::kInternal,
           absl::StrFormat(
               "Error receiving packet for encoding with error: %s for "
               "stream index: %d",
-              AvErrToStr(packet_result), stream_index));
+              AvErrToStr(packet_result), static_cast<int>(stream_index)));
     }
 
-    spdlog::info("Encoded packet for stream index: {} with size: {}",
-                 stream_index, packet_->size);
+    spdlog::debug("Encoded packet for stream index: {} with size: {}",
+                  static_cast<int>(stream_index), packet_->size);
 
     AVStream* encoding_stream = encoder_info.encoding_stream;
 
@@ -286,13 +313,13 @@ absl::Status FrameWriter::EncodeFrame(StreamIndex stream_index,
     av_packet_rescale_ts(packet_, encoder->time_base,
                          encoding_stream->time_base);
     int res = av_interleaved_write_frame(format_ctx_, packet_);
-    if (res != 0) {
+    if (res < 0) {
       return absl::Status(
           absl::StatusCode::kInternal,
           absl::StrFormat(
               "Error writing packet with error: %s for stream index: "
               "%d",
-              AvErrToStr(res), stream_index));
+              AvErrToStr(res), static_cast<int>(stream_index)));
     }
   }
 }
