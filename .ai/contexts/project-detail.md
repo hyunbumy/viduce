@@ -213,6 +213,9 @@ Inference models are currently traced with fixed input shapes (e.g., 240x240). I
 - `upscale/upscaler_test`: uses `MockModel` (scale=2, echoes input data quadrupled). Verifies pixel values are preserved through the full color conversion round-trip; also tests model error propagation.
 - No tests for `ModelImpl` (requires real .tflite) or `engine_api.cc` orchestration.
 
+### Testing the library E2E
+- Build the `Dockerfile` in the "build" stage using the `debug`environment.
+
 ---
 
 ## Workflow Example: `EnhanceVideo`

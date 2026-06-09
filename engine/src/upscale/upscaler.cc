@@ -55,8 +55,7 @@ absl::StatusOr<std::unique_ptr<Frame>> ConvertColor(
     return absl::InternalError("Failed to create SwsContext");
   }
 
-  absl::StatusOr<std::unique_ptr<Frame>> dst_frame =
-      Frame::Create(input->stream_info());
+  absl::StatusOr<std::unique_ptr<Frame>> dst_frame = Frame::Clone(input);
   if (!dst_frame.ok()) {
     return dst_frame.status();
   }
@@ -112,18 +111,17 @@ class Gbr24pConverter {
       denormalized[i] = output.data[i] * norm_scale_;
     }
 
-    AVFrame* input_avframe = input_frame->frame();
     // Convert pixels to a temp frame for sws_scale
     absl::StatusOr<std::unique_ptr<Frame>> temp_frame =
-        Frame::Create(input_frame->stream_info());
+        Frame::Clone(input_frame);
     if (!temp_frame.ok()) {
       return temp_frame.status();
     }
 
     AVFrame* temp_avframe = (*temp_frame)->frame();
     temp_avframe->format = conv_format_;
-    temp_avframe->width = input_avframe->width * out_scale;
-    temp_avframe->height = input_avframe->height * out_scale;
+    temp_avframe->width = input_frame->frame()->width * out_scale;
+    temp_avframe->height = input_frame->frame()->height * out_scale;
     int size = av_image_fill_arrays(
         temp_avframe->data, temp_avframe->linesize, denormalized.data(),
         conv_format_, temp_avframe->width, temp_avframe->height, /*align=*/1);
@@ -133,10 +131,11 @@ class Gbr24pConverter {
     }
 
     // Convert to a new frame in the same format as the input frame.
-    return ConvertColor(temp_frame->get(),
-                        {.width = temp_avframe->width,
-                         .height = temp_avframe->height,
-                         .pix_fmt = (AVPixelFormat)input_avframe->format});
+    return ConvertColor(
+        temp_frame->get(),
+        {.width = temp_avframe->width,
+         .height = temp_avframe->height,
+         .pix_fmt = (AVPixelFormat)input_frame->frame()->format});
   }
 
  private:
@@ -148,6 +147,9 @@ class Gbr24pConverter {
 
 Upscaler::Upscaler(Model* model) : model_(model) {}
 
+// TODO: I think we can actually consume the frame here (via unique_ptr) instead
+// of cloning it since we don't necessarily need the original frame unlike frame
+// generation.
 absl::StatusOr<std::unique_ptr<Frame>> Upscaler::Upscale(Frame* input_frame) {
   if (absl::Status status = Validate(input_frame); status != absl::OkStatus()) {
     return status;

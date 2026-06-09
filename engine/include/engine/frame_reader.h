@@ -30,15 +30,20 @@ class FrameReader {
   const MediaInfo& media_info() const { return media_info_; }
 
   // Returns the next available frame or null if EOF.
+  // Return order should be based on presentation timestamp.
   absl::StatusOr<std::unique_ptr<Frame>> ReadNextFrame();
 
  private:
-  explicit FrameReader(AVFormatContext* format_ctx,
+  explicit FrameReader(AVFormatContext* format_ctx, AVPacket* packet,
                        const std::vector<AVCodecContext*>& codecs,
                        const MediaInfo& media_info)
-      : format_ctx_(format_ctx), codecs_(codecs), media_info_(media_info) {}
+      : format_ctx_(format_ctx),
+        packet_(packet),
+        codecs_(codecs),
+        media_info_(media_info) {}
 
   AVFormatContext* format_ctx_;
+  AVPacket* packet_;
   std::vector<AVCodecContext*> codecs_;
 
   MediaInfo media_info_;

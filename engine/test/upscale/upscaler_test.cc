@@ -18,6 +18,7 @@ extern "C" {
 namespace {
 
 using ::viduce::engine::Frame;
+using ::viduce::engine::StreamInfo;
 using ::viduce::engine::VideoInfo;
 using ::viduce::engine::upscale::Model;
 using ::viduce::engine::upscale::Upscaler;
@@ -65,10 +66,13 @@ TEST(UpscaleTest, CreatesNewFrame) {
   absl::StatusOr<std::unique_ptr<Frame>> res = upscaler.Upscale(input->get());
 
   EXPECT_THAT(res, absl_testing::IsOk());
+  StreamInfo out_info = (*res)->stream_info();
+  EXPECT_TRUE(std::holds_alternative<VideoInfo>(out_info.type_info));
   AVFrame* new_frame = (*res)->frame();
   EXPECT_EQ(new_frame->width, 4);
   EXPECT_EQ(new_frame->height, 2);
   EXPECT_EQ(new_frame->format, (int)AV_PIX_FMT_RGB24);
+  EXPECT_EQ(new_frame->pkt_dts, frame->pkt_dts);
 
   // Check the data, being mindful of the stride / padding since AVFrame under
   // the hood can change the underlying data layout for memory alignment:

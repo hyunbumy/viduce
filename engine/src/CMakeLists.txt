@@ -30,6 +30,21 @@ target_link_libraries(frame_reader
 )
 target_link_libraries(frame_reader PRIVATE frame util)
 
+add_library(frame_writer STATIC frame_writer.cc)
+target_include_directories(frame_writer PUBLIC ../include)
+target_link_libraries(frame_writer
+    PRIVATE
+    absl::status
+    absl::statusor
+    absl::strings
+    avcodec
+    avformat
+    avutil
+    spdlog::spdlog
+    swscale
+)
+target_link_libraries(frame_writer PRIVATE frame util)
+
 add_library(engine_api SHARED engine_api.cc)
 target_include_directories(engine_api PUBLIC ../include)
 target_link_libraries(engine_api
@@ -40,7 +55,13 @@ target_link_libraries(engine_api
     avutil
     spdlog::spdlog
 )
-target_link_libraries(engine_api PRIVATE frame_reader model_impl upscaler)
+target_link_libraries(engine_api
+    PRIVATE
+    frame_reader
+    frame_writer
+    model_impl
+    upscaler
+)
 
 set_target_properties(engine_api PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
