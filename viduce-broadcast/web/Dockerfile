@@ -1,4 +1,4 @@
-# Development/build image for the viduce-streamer web app.
+# Development/build image for the viduce-broadcast web app.
 # Isolated from the repo's Rust/C++ engine image — this is a Node/TypeScript app.
 FROM node:20-bookworm-slim AS base
 

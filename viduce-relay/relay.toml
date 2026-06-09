@@ -1,0 +1,25 @@
+# Local MoQ relay configuration for viduce-relay.
+# Modeled on https://github.com/moq-dev/moq/blob/main/demo/relay/localhost.toml
+# Development only: anonymous auth and a self-signed certificate.
+
+[log]
+# Debug logging for development. The RUST_LOG env var takes precedence.
+level = "debug"
+
+[server]
+# Listen for QUIC (WebTransport) connections on UDP 4443.
+# If IPv6 causes issues locally, try "127.0.0.1:4443".
+listen = "[::]:4443"
+
+# Self-generate a certificate for localhost at startup. The fingerprint is served at
+# /certificate.sha256 (see [web.http]) so browsers can pin it via WebTransport
+# `serverCertificateHashes` — no CA import or trust-store changes needed for local dev.
+tls.generate = ["localhost"]
+
+[web.http]
+# TCP 4443: serves certificate.sha256 plus HTTP/WebSocket fallbacks for track delivery.
+listen = "[::]:4443"
+
+[auth]
+# Allow anonymous access to everything (local development only).
+public = ""
