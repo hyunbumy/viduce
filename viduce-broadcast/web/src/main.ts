@@ -1,52 +1,119 @@
-// App entry: wires the Start/Stop controls to webcam capture -> 240x240 resize
-// -> local preview. The MoQ publish step (task 5) attaches to the same resized track.
+// App entry. Two independent lifecycles:
+//   - Preview: starts automatically on load and stays on (local only).
+//   - Broadcast: the Start button publishes the 240x240 feed to a MoQ relay;
+//     Stop ends publishing but keeps the preview running.
+// A badge + red border make "broadcasting" vs "preview only" unmistakable.
 import { startCamera, stopStream } from "./camera";
 import { createLetterboxPipeline, type ResizePipeline, TARGET_SIZE } from "./resize";
+import { startPublishing, type Publisher } from "./publisher";
 
 const preview = requireEl<HTMLVideoElement>("#preview");
+const badge = requireEl<HTMLSpanElement>("#live-badge");
 const startBtn = requireEl<HTMLButtonElement>("#start");
 const stopBtn = requireEl<HTMLButtonElement>("#stop");
 const statusEl = requireEl<HTMLDivElement>("#status");
+const relayUrlInput = requireEl<HTMLInputElement>("#relay-url");
+const nameInput = requireEl<HTMLInputElement>("#broadcast-name");
 
 let stream: MediaStream | null = null;
 let pipeline: ResizePipeline | null = null;
+let publisher: Publisher | null = null;
 
-startBtn.addEventListener("click", start);
-stopBtn.addEventListener("click", stop);
+startBtn.addEventListener("click", onStart);
+stopBtn.addEventListener("click", () => stopBroadcast());
+// Release the camera if the page goes away.
+window.addEventListener("pagehide", teardownPreview);
 
-async function start(): Promise<void> {
+// Show the preview feed as soon as the page loads.
+void enablePreview();
+
+/** Start button: begin broadcasting if previewing, or (re)start the preview after a failure. */
+function onStart(): void {
+  if (stream) void startBroadcast();
+  else void enablePreview();
+}
+
+/** Open the camera and show the 240x240 preview. Stays running until the page unloads. */
+async function enablePreview(): Promise<void> {
   startBtn.disabled = true;
-  setStatus("Requesting camera…");
+  setStatus("Starting camera…");
   try {
     stream = await startCamera();
-
     const cameraTrack = stream.getVideoTracks()[0];
     if (!cameraTrack) throw new Error("Camera stream has no video track.");
 
     pipeline = createLetterboxPipeline(cameraTrack);
-
-    // Preview the *resized* track so we see exactly what will be published.
     preview.srcObject = new MediaStream([pipeline.track]);
     await preview.play();
 
-    setStatus(`Camera live · downscaled to ${TARGET_SIZE}×${TARGET_SIZE}`);
-    stopBtn.disabled = false;
+    showPreviewing();
   } catch (err) {
-    cleanup();
+    teardownPreview();
+    setBadge(false);
     setStatus(err instanceof Error ? err.message : String(err), true);
+    startBtn.textContent = "Enable camera";
     startBtn.disabled = false;
+    stopBtn.disabled = true;
+    setInputsDisabled(false);
   }
 }
 
-function stop(): void {
-  cleanup();
-  setStatus("Stopped");
-  startBtn.disabled = false;
-  stopBtn.disabled = true;
+/** Publish the resized preview track to the relay. */
+async function startBroadcast(): Promise<void> {
+  if (!pipeline) return;
+  startBtn.disabled = true;
+  setInputsDisabled(true);
+  const name = nameInput.value.trim();
+  setStatus("Connecting to relay…");
+  try {
+    publisher = await startPublishing({
+      relayUrl: relayUrlInput.value.trim(),
+      name,
+      track: pipeline.track,
+    });
+    showBroadcasting(name);
+
+    // Reflect an unexpected connection drop in the UI.
+    const current = publisher;
+    const onClosed = () => {
+      if (publisher === current) stopBroadcast("Relay connection closed.", true);
+    };
+    current.closed.then(onClosed, onClosed);
+  } catch (err) {
+    stopBroadcast(err instanceof Error ? err.message : String(err), true);
+  }
 }
 
-/** Tear down the pipeline and camera, releasing the device. Safe to call repeatedly. */
-function cleanup(): void {
+/** Stop publishing and return to preview-only. The camera/preview keeps running. */
+function stopBroadcast(message = "Previewing — not broadcasting", isError = false): void {
+  publisher?.stop();
+  publisher = null;
+  showPreviewing(message, isError);
+}
+
+/** Apply the preview-only UI state (camera live, not broadcasting). */
+function showPreviewing(message = "Previewing — not broadcasting", isError = false): void {
+  setBadge(false);
+  startBtn.textContent = "Start broadcast";
+  startBtn.disabled = false;
+  stopBtn.disabled = true;
+  setInputsDisabled(false);
+  setStatus(message, isError);
+}
+
+/** Apply the broadcasting UI state. */
+function showBroadcasting(name: string): void {
+  setBadge(true);
+  startBtn.disabled = true;
+  stopBtn.disabled = false;
+  setInputsDisabled(true);
+  setStatus(`Broadcasting · ${TARGET_SIZE}×${TARGET_SIZE} → ${name}`);
+}
+
+/** Stop publisher, pipeline, and camera, releasing the device. Idempotent. */
+function teardownPreview(): void {
+  publisher?.stop();
+  publisher = null;
   pipeline?.stop();
   pipeline = null;
   if (stream) {
@@ -54,6 +121,17 @@ function cleanup(): void {
     stream = null;
   }
   preview.srcObject = null;
+}
+
+function setBadge(live: boolean): void {
+  badge.textContent = live ? "● LIVE" : "Preview";
+  badge.classList.toggle("live", live);
+  preview.classList.toggle("live", live);
+}
+
+function setInputsDisabled(disabled: boolean): void {
+  relayUrlInput.disabled = disabled;
+  nameInput.disabled = disabled;
 }
 
 function setStatus(message: string, isError = false): void {

@@ -37,5 +37,8 @@ curl http://127.0.0.1:4443/certificate.sha256   # should print a hash
 
 ## Connecting a client
 
-Point a MoQ client's relay URL at `https://localhost:4443`. The client discovers the cert
-fingerprint automatically via the endpoint above.
+Point a MoQ client's relay URL at `http://localhost:4443` (note **http**, not https).
+With `http://`, the MoQ client fetches the fingerprint from `certificate.sha256`, pins it
+via WebTransport `serverCertificateHashes`, and upgrades to the encrypted QUIC connection
+— so no CA trust is needed. Using `https://` skips the fingerprint fetch and fails against
+the self-signed cert.
