@@ -19,6 +19,18 @@ services:
       - "44443:4443/udp" # QUIC / WebTransport
       - "44443:4443/tcp" # cert fingerprint (certificate.sha256) + HTTP/WS fallback
 
+  # Headless MoQ consumer. Unlike the browser, this is a container, so it reaches
+  # the relay over the shared compose network by container name (viduce-relay:4443)
+  # rather than via the published host ports.
+  ingest:
+    build: ./viduce-ingest
+      # context: . # repo root — viduce-ingest is part of the root Cargo workspace
+      # dockerfile: viduce-ingest/Dockerfile
+    image: viduce-ingest
+    container_name: viduce-ingest
+    depends_on:
+      - relay
+
   web:
     build: ./viduce-broadcast/web
     image: viduce-broadcast-web

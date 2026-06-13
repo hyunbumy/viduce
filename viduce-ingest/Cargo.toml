@@ -1,0 +1,12 @@
+[package]
+name = "viduce-ingest"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.102"
+moq-native = "0.17.0"
+moq-net = "0.1.10"
+tokio = "1.52.3"
+tracing = "0.1.44"
+url = "2.5.8"
