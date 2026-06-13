@@ -1,5 +1,7 @@
 # Development/build image for the viduce-broadcast web app.
 # Isolated from the repo's Rust/C++ engine image — this is a Node/TypeScript app.
+
+# TODO: Remove this in favor of the root Dockerfile which will perform the build.
 FROM node:20-bookworm-slim AS base
 
 WORKDIR /app

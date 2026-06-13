@@ -3,19 +3,27 @@ ARG BUILD_TYPE="debug"
 
 ### Base image for development and build. Should only contain env setup
 FROM docker.io/rust:1.92-bookworm AS base 
-RUN apt update
+RUN apt update && apt install -y \
+    # Sys deps
+    git-lfs \
+    # Dependencies for cpp
+    build-essential clang cmake gdb \
+    # Depnedencies for ffmpeg
+    libavformat-dev libavcodec-dev libavutil-dev \
+    # Dependencies for opencv
+    libopencv-dev \
+    # Node
+    nodejs npm
 
-# Sys deps
-RUN apt install -y git-lfs
-# Dependencies for cpp
-RUN apt install -y build-essential clang cmake gdb
-# Depnedencies for ffmpeg
-RUN apt install -y libavformat-dev libavcodec-dev libavutil-dev
-# Dependencies for opencv
-RUN apt install -y libopencv-dev
 # Python dependencies
 # Setup uv
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+
+### Development image
+FROM base AS develop
+
+# Install dev rust deps
+RUN rustup component add rust-docs rustfmt clippy
 
 ### Temporary stages for build type
 FROM base AS build-debug

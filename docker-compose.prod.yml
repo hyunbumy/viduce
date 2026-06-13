@@ -1,0 +1,39 @@
+# Prod stack: the compiled stack — ingest + broadcast + relay.
+#
+#   docker compose -f docker-compose.prod.yml up --build
+#
+# Then open http://127.0.0.1:45173 in a Chromium-based browser. In the app's
+# Relay URL field use http://127.0.0.1:44443.
+#
+# Note: the browser (not a container) connects to the relay over the published
+# host ports. Containers reach the relay over the shared compose network by name
+# (viduce-relay:4443). Host ports are deliberately obscure to avoid conflicts.
+services:
+  relay:
+    build: ./viduce-relay
+    image: viduce-relay
+    container_name: viduce-relay
+    ports:
+      # host:container — host side is deliberately obscure to avoid conflicts.
+      - "44443:4443/udp" # QUIC / WebTransport
+      - "44443:4443/tcp" # cert fingerprint (certificate.sha256) + HTTP/WS fallback
+
+  # Headless MoQ consumer. Reaches the relay over the shared compose network by
+  # container name (viduce-relay:4443) rather than via the published host ports.
+  ingest:
+    build: ./viduce-ingest
+      # context: . # repo root — viduce-ingest is part of the root Cargo workspace
+      # dockerfile: viduce-ingest/Dockerfile
+    image: viduce-ingest
+    container_name: viduce-ingest
+    depends_on:
+      - relay
+
+  broadcast:
+    build: ./viduce-broadcast/web
+    image: viduce-broadcast-web
+    container_name: viduce-broadcast-web
+    ports:
+      - "45173:5173" # Vite server (host 45173 -> container 5173)
+    depends_on:
+      - relay

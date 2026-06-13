@@ -1,0 +1,36 @@
+# Dev stack: interactive development environment + relay.
+#
+#   docker compose -f docker-compose.dev.yml up --build -d
+#   docker compose -f docker-compose.dev.yml exec dev bash
+#
+# The `dev` service is the root Dockerfile's `base` target (Rust + C++ + ffmpeg +
+# opencv + Python/uv + Node). The repo is bind-mounted so you edit on the host and
+# build/run inside the container. The relay is reachable on the shared compose
+# network as viduce-relay:4443, and from the host on http://127.0.0.1:44443.
+services:
+  relay:
+    build: ./viduce-relay
+    image: viduce-relay
+    container_name: viduce-relay
+    ports:
+      # host:container — host side is deliberately obscure to avoid conflicts.
+      - "44443:4443/udp" # QUIC / WebTransport
+      - "44443:4443/tcp" # cert fingerprint (certificate.sha256) + HTTP/WS fallback
+
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: develop
+    image: viduce-dev
+    container_name: viduce-dev
+    working_dir: /usr/src/viduce
+    ports:
+      - "45173:5173" # Vite dev server (host 45173 -> container 5173)
+    volumes:
+      - .:/usr/src/viduce # live-mount the repo
+    command: ["sleep", "infinity"] # idle so you can `exec dev bash`
+    stdin_open: true
+    tty: true
+    depends_on:
+      - relay
