@@ -2,7 +2,7 @@
 ARG BUILD_TYPE="debug"
 
 ### Base image for development and build. Should only contain env setup
-FROM rust:1.92-bookworm AS base 
+FROM docker.io/rust:1.92-bookworm AS base 
 RUN apt update
 
 # Sys deps
@@ -53,7 +53,7 @@ RUN cp target/${SERVICE_PATH}/cmd /bin/viduce
 
 ### Execution stage
 ## Image for deployment
-FROM debian:bookworm-slim
+FROM docker.io/debian:bookworm-slim
 
 RUN apt update
 RUN apt install -y ffmpeg
