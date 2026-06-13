@@ -5,6 +5,8 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.102"
+hang = "0.19.0"
+moq-mux = "0.5.4"
 moq-native = "0.17.0"
 moq-net = "0.1.10"
 tokio = "1.52.3"
