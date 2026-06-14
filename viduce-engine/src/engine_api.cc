@@ -1,5 +1,6 @@
 #include "engine/engine_api.h"
 
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -147,4 +148,9 @@ int EnhanceVideo(const char* input_path, const char* output_dir) {
     spdlog::error("EnhanceVideo failed: {}", status.message());
   }
   return status.raw_code();
+}
+
+int ReceiveFrame(const uint8_t* data, size_t size) {
+  spdlog::error("unimplemented");
+  return absl::UnimplementedError("unimplemented").raw_code();
 }
