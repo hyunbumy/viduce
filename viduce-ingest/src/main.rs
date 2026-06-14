@@ -1,4 +1,26 @@
+use libc::c_int;
 use std::time::Duration;
+
+// IMPORTANT: Make sure to set the LD_LIBRARY_PATH correctly to locate the
+// dynamic lib.
+#[link(name = "engine_api")]
+unsafe extern "C" {
+    fn ReceiveFrame(data: *const u8, size: usize) -> c_int;
+}
+
+fn process(frame: moq_mux::container::Frame) -> anyhow::Result<()> {
+    tracing::info!(
+        timestamp = ?frame.timestamp,
+        keyframe = frame.keyframe,
+        bytes = frame.payload.len(),
+        "received frame"
+    );
+
+    let res = unsafe { ReceiveFrame(frame.payload.as_ptr(), frame.payload.len()) };
+    tracing::info!("engine response: {res}");
+
+    Ok(())
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -78,12 +100,7 @@ async fn main() -> anyhow::Result<()> {
     loop {
         match ordered.read().await {
             Ok(Some(frame)) => {
-                tracing::info!(
-                    timestamp = ?frame.timestamp,
-                    keyframe = frame.keyframe,
-                    bytes = frame.payload.len(),
-                    "received frame"
-                );
+                process(frame)?;
             }
             Ok(None) => {
                 tracing::info!("track closed");
