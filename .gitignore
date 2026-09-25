@@ -8,3 +8,8 @@ bin
 
 # AI
 .ai/plans
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
