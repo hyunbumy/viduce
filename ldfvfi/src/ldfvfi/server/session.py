@@ -1,3 +1,4 @@
+import logging
 import time
 from typing import Any, Tuple
 import torch
@@ -5,6 +6,8 @@ import torch
 from ldfvfi.proto import ChunkType, VfiParameters
 from ldfvfi.server.session_runner import SkipConcatSession
 from ldfvfi.server.shm import ShmReader, ShmWriter
+
+logger = logging.getLogger(__name__)
 
 
 class VfiSession:
@@ -43,6 +46,11 @@ class VfiSession:
             Tuple of (num_output_frames, inference_time_ms).
         """
         in_header, input_tensor = self.shm_reader.read_tensor()
+        if in_header.seq_id != chunk_index:
+            logger.warning(
+                f"Session '{self.session_id}': SHM header seq_id ({in_header.seq_id}) "
+                f"does not match request chunk_index ({chunk_index})"
+            )
 
         t_start = time.perf_counter()
         output_tensor = self.runner.interpolate_chunk(
