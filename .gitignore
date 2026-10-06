@@ -8,6 +8,8 @@ bin
 
 # AI
 .ai/plans
+.ai/superpowers
+.superpowers
 
 # Python
 __pycache__/
