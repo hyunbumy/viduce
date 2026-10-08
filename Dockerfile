@@ -8,6 +8,8 @@ RUN apt update && apt install -y \
     git-lfs \
     # Dependencies for cpp
     build-essential clang cmake gdb \
+    # Dependencies for protobuf and gRPC
+    protobuf-compiler libprotobuf-dev libgrpc++-dev protobuf-compiler-grpc \
     # Depnedencies for ffmpeg
     libavformat-dev libavcodec-dev libavutil-dev \
     # Dependencies for opencv
