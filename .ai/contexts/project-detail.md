@@ -48,7 +48,9 @@ cargo test --package upscaler upscale_success_returns_upscaled_bytes
 ### Development Container
 
 ```bash
-./start_devenv.sh    # Builds base Docker image and runs container with repo volume-mounted
+./dev.sh                   # Build + start the dev stack (docker-compose.dev.yml) in the background
+./dev.sh exec dev bash     # Shell into it (or attach VS Code to the `viduce-dev` container)
+./dev.sh down              # Stop it
 ```
 
 ### Docker
