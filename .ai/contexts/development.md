@@ -10,7 +10,7 @@ This document outlines the expected behavior and workflow for AI agents working 
 
 ### 2. Verification Before Approval
 - AI agents should always **ask for approval only once** the suggested changes have been **verified**.
-- Verification must be performed within the **development docker environment** (use `./start_devenv.sh`).
+- Verification must be performed within the **development docker environment** (use `./dev.sh`).
 - Once verified, the suggestion presented to the user should include a **full diff** of all proposed changes.
 
 ## Technical Checklist

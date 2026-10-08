@@ -6,11 +6,11 @@ This directory contains AI agent context and planning resources for the Viduce p
 
 Build, test, and run commands for native components (e.g., the C++ engine) must
 be executed **inside the development container**, not on the host. Start it
-from the repo root with `./start_devenv.sh` — this builds and attaches to the
-`devenv` Podman container with the repo mounted at `/mnt/host/viduce`.
+from the repo root with `./dev.sh` — this builds and starts the `viduce-dev`
+container (plus the relay) with the repo mounted at `/usr/src/viduce`.
 
 If the container is already running, exec into it instead of starting a new
-one, e.g. `podman exec devenv bash -lc "cd /mnt/host/viduce/engine && <cmd>"`.
+one, e.g. `./dev.sh exec dev bash -lc "cd /usr/src/viduce/engine && <cmd>"`.
 Do not attempt to run `cmake`, `ctest`, or other build tooling directly on the
 host — toolchain and library versions are only guaranteed inside the container.
 

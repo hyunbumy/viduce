@@ -1,9 +1,10 @@
 # Viduce Engine
 
 All commands below must be run **inside the development container**. Start it
-from the repo root with `./start_devenv.sh`, which builds and attaches to the
-`devenv` Podman container with this repo mounted at `/mnt/host/viduce`. Then
-`cd /mnt/host/viduce/engine` before running any of the commands in this
+from the repo root with `./dev.sh`, which builds and starts the `viduce-dev`
+container with this repo mounted at `/usr/src/viduce`, then open a shell with
+`./dev.sh exec dev bash`. Then
+`cd /usr/src/viduce/engine` before running any of the commands in this
 document.
 
 ## Running the demo
