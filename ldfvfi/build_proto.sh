@@ -7,10 +7,10 @@ cd "$SCRIPT_DIR"
 mkdir -p src/ldfvfi/proto
 
 uv run python -m grpc_tools.protoc \
-    -Iproto \
+    -I../proto/ldfvfi/v1 \
     --python_out=src/ldfvfi/proto \
     --grpc_python_out=src/ldfvfi/proto \
-    proto/service.proto
+    ../proto/ldfvfi/v1/service.proto
 
 # Fix relative import in generated gRPC stub for package usage
 if [[ "$OSTYPE" == "darwin"* ]]; then

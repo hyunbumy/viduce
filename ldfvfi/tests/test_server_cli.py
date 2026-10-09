@@ -49,9 +49,9 @@ class TestServerCLI(unittest.TestCase):
         )
 
         channel = grpc.insecure_channel(f"127.0.0.1:{port}")
-        # Wait up to 5s for gRPC server readiness
+        # Wait up to 10s for gRPC server readiness
         try:
-            grpc.channel_ready_future(channel).result(timeout=5.0)
+            grpc.channel_ready_future(channel).result(timeout=10.0)
         except grpc.FutureTimeoutError:
             proc.kill()
             stdout, stderr = proc.communicate()

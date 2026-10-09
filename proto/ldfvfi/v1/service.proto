@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package viduce.vfi;
+package viduce.ldfvfi;
 
 // Service exposed by the Python daemon to orchestrate frame interpolation.
 service LdfVfiService {
