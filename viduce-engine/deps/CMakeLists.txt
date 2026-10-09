@@ -24,3 +24,4 @@ endif()
 FetchContent_MakeAvailable(abseil)
 
 include(litert.cmake)
+include(grpc.cmake)
