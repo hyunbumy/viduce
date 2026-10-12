@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     moq_native::Log::new(tracing::Level::DEBUG).init()?;
@@ -35,48 +37,64 @@ async fn main() -> anyhow::Result<()> {
         .await?
         .ok_or_else(|| anyhow::anyhow!("no catalog"))?;
 
+    let info_clone = info.clone();
     let catalog = hang::Catalog {
-        video: info.video,
-        audio: info.audio,
+        video: info_clone.video,
+        audio: info_clone.audio,
     };
     let catalog_str = catalog.to_string()?;
     tracing::info!("catalog: {catalog_str}");
 
     // // Find the first video track.
-    // let (name, config) = info
-    // 	.video
-    // 	.renditions
-    // 	.iter()
-    // 	.next()
-    // 	.ok_or_else(|| anyhow::anyhow!("no video renditions"))?;
+    let (name, config) = info
+        .video
+        .renditions
+        .iter()
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("no video renditions"))?;
 
-    // tracing::info!(
-    // 	%name,
-    // 	codec = %config.codec,
-    // 	width = ?config.coded_width,
-    // 	height = ?config.coded_height,
-    // 	"subscribing to video track"
-    // );
+    tracing::info!(
+        %name,
+        codec = %config.codec,
+        width = ?config.coded_width,
+        height = ?config.coded_height,
+        "subscribing to video track"
+    );
 
-    // // Subscribe to the video track.
-    // let track = moq_net::Track {
-    // 	name: name.clone(),
-    // 	priority: 1,
-    // };
+    // Subscribe to the video track.
+    let video_track = moq_net::Track {
+        name: name.clone(),
+        priority: 1,
+    };
 
-    // let track_consumer = broadcast.subscribe_track(&track)?;
-    // let mut ordered = moq_mux::container::Consumer::new(track_consumer, moq_mux::catalog::hang::Container::Legacy)
-    // 	.with_latency(Duration::from_millis(500));
+    let video_consumer = broadcast.subscribe_track(&video_track)?;
+    let mut ordered = moq_mux::container::Consumer::new(
+        video_consumer,
+        moq_mux::catalog::hang::Container::Legacy,
+    )
+    .with_latency(Duration::from_millis(500));
 
-    // // Read frames in latency-bounded presentation order.
-    // while let Some(frame) = ordered.read().await? {
-    // 	tracing::info!(
-    // 		timestamp = ?frame.timestamp,
-    // 		keyframe = frame.keyframe,
-    // 		bytes = frame.payload.len(),
-    // 		"received frame"
-    // 	);
-    // }
+    // Read frames in latency-bounded presentation order.
+    loop {
+        match ordered.read().await {
+            Ok(Some(frame)) => {
+                tracing::info!(
+                    timestamp = ?frame.timestamp,
+                    keyframe = frame.keyframe,
+                    bytes = frame.payload.len(),
+                    "received frame"
+                );
+            }
+            Ok(None) => {
+                tracing::info!("track closed");
+                break;
+            }
+            Err(e) => {
+                tracing::error!(error = ?e, "error reading frame");
+                break;
+            }
+        }
+    }
 
     // Wait until the session is closed.
     // session.closed().await.map_err(Into::<anyhow::Error>::into)?;

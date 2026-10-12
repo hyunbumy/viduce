@@ -39,7 +39,14 @@ export async function startPublishing(options: PublishOptions): Promise<Publishe
       source: options.track as Publish.Video.Source,
       // Publish a single rendition at the source resolution (240x240).
       hd: { enabled: false },
-      sd: { enabled: true, config: { maxPixels: TARGET_SIZE * TARGET_SIZE } },
+      sd: {
+        enabled: true,
+        config: {
+          maxPixels: TARGET_SIZE * TARGET_SIZE
+        },
+        // TODO: Replace with "loc" since only "legacy" is supported by @moq/publish
+        container: { kind: "legacy" },
+      },
     },
   });
 
