@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package viduce.engine;
+
+// Control-plane API exposed by the viduce engine.
+service EngineService {
+  rpc CreateSession(CreateSessionRequest) returns (CreateSessionResponse);
+}
+
+message CreateSessionRequest {}
+
+message CreateSessionResponse {}

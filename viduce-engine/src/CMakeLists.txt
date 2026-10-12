@@ -2,6 +2,37 @@
 
 add_subdirectory(upscale)
 
+# C++ protobuf/gRPC code for EngineService, generated into the build tree from
+# the repo-root proto/ tree. Protobuf/gRPC discovery and GRPC_CPP_PLUGIN come
+# from deps/grpc.cmake. protoc is invoked directly because CMake 3.25's
+# protobuf_generate assumes protos live under the current source directory.
+set(ENGINE_SERVICE_PROTO_ROOT "${CMAKE_SOURCE_DIR}/../proto")
+set(ENGINE_SERVICE_GEN_DIR "${CMAKE_CURRENT_BINARY_DIR}/proto_gen")
+set(ENGINE_SERVICE_PROTO "${ENGINE_SERVICE_PROTO_ROOT}/engine/v1/engine_service.proto")
+set(ENGINE_SERVICE_GEN "${ENGINE_SERVICE_GEN_DIR}/engine/v1/engine_service")
+file(MAKE_DIRECTORY "${ENGINE_SERVICE_GEN_DIR}")
+add_custom_command(
+    OUTPUT
+        "${ENGINE_SERVICE_GEN}.pb.h"
+        "${ENGINE_SERVICE_GEN}.pb.cc"
+        "${ENGINE_SERVICE_GEN}.grpc.pb.h"
+        "${ENGINE_SERVICE_GEN}.grpc.pb.cc"
+    COMMAND "${Protobuf_PROTOC_EXECUTABLE}"
+        -I "${ENGINE_SERVICE_PROTO_ROOT}"
+        --cpp_out "${ENGINE_SERVICE_GEN_DIR}"
+        --grpc_out "${ENGINE_SERVICE_GEN_DIR}"
+        "--plugin=protoc-gen-grpc=${GRPC_CPP_PLUGIN}"
+        "${ENGINE_SERVICE_PROTO}"
+    DEPENDS "${ENGINE_SERVICE_PROTO}"
+    VERBATIM
+)
+add_library(engine_service_proto STATIC
+    "${ENGINE_SERVICE_GEN}.pb.cc"
+    "${ENGINE_SERVICE_GEN}.grpc.pb.cc"
+)
+target_include_directories(engine_service_proto PUBLIC "${ENGINE_SERVICE_GEN_DIR}")
+target_link_libraries(engine_service_proto PUBLIC protobuf::libprotobuf gRPC::grpc++)
+
 add_library(util STATIC util.cc)
 target_include_directories(util PUBLIC ../include)
 target_link_libraries(util PRIVATE avutil)
