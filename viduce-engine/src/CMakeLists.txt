@@ -37,6 +37,15 @@ add_library(engine_service_impl STATIC engine_service_impl.cc)
 target_include_directories(engine_service_impl PUBLIC ../include)
 target_link_libraries(engine_service_impl PUBLIC engine_service_proto)
 
+add_executable(engine_server engine_server.cc)
+target_link_libraries(engine_server
+    PRIVATE
+    absl::flags
+    absl::flags_parse
+    engine_service_impl
+    spdlog::spdlog
+)
+
 add_library(util STATIC util.cc)
 target_include_directories(util PUBLIC ../include)
 target_link_libraries(util PRIVATE avutil)
