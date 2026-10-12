@@ -31,4 +31,9 @@ target_link_libraries(frame_writer_test
 target_link_libraries(frame_writer_test PRIVATE frame frame_writer)
 gtest_discover_tests(frame_writer_test)
 
+add_executable(engine_service_impl_test engine_service_impl_test.cc)
+target_link_libraries(engine_service_impl_test PRIVATE gmock gtest_main)
+target_link_libraries(engine_service_impl_test PRIVATE engine_service_impl)
+gtest_discover_tests(engine_service_impl_test)
+
 add_subdirectory(upscale)

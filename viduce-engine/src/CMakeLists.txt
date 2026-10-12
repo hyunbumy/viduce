@@ -33,6 +33,10 @@ add_library(engine_service_proto STATIC
 target_include_directories(engine_service_proto PUBLIC "${ENGINE_SERVICE_GEN_DIR}")
 target_link_libraries(engine_service_proto PUBLIC protobuf::libprotobuf gRPC::grpc++)
 
+add_library(engine_service_impl STATIC engine_service_impl.cc)
+target_include_directories(engine_service_impl PUBLIC ../include)
+target_link_libraries(engine_service_impl PUBLIC engine_service_proto)
+
 add_library(util STATIC util.cc)
 target_include_directories(util PUBLIC ../include)
 target_link_libraries(util PRIVATE avutil)
