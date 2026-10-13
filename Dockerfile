@@ -44,7 +44,7 @@ WORKDIR /usr/src/viduce
 COPY . .
 
 # Build cpp engine
-WORKDIR engine
+WORKDIR viduce-engine
 RUN cmake -B build -DCMAKE_BUILD_TYPE=${ENGINE_BUILD} -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
 RUN cmake --build build -j8
 

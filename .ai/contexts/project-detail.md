@@ -22,12 +22,12 @@ The system is a Rust workspace (CLI, ffmpeg wrapping, cloud/local upscalers) + a
 
 ### Prerequisites
 
-The C++ engine **must be built before** `cargo build` — it produces `engine/build/lib/libengine_api.so` which Rust links against.
+The C++ engine **must be built before** `cargo build` — it produces `viduce-engine/build/lib/libengine_api.so` which Rust links against.
 
 ### C++ Engine
 
 ```bash
-cd engine
+cd viduce-engine
 cmake -B build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
 cmake --build build -j8
 cd build && ctest -VV          # All C++ tests (verbose)
@@ -113,11 +113,11 @@ util -> (stdlib only)
 
 ---
 
-### C++ Engine (`engine/`)
+### C++ Engine (`viduce-engine/`)
 
 The core processing engine is written in C++17 and focuses on video frame decoding/encoding and deep learning model inference.
 
-#### C FFI surface (`engine/include/engine/engine_api.h`)
+#### C FFI surface (`viduce-engine/include/engine/engine_api.h`)
 ```cpp
 extern "C" {
 int DecodeVideo(const char* input_path);                          // deprecated
@@ -132,7 +132,7 @@ Returns `absl::Status::raw_code()` (0 = OK). `VIDUCE_UPSCALER_PATH` env var must
   - `Create(url)` opens and finds stream info; sets up one codec context per stream.
   - `ReadNextFrame()` → `StatusOr<unique_ptr<Frame>>`: returns `nullptr` at EOF.
 
-#### Upscaling layer (`engine/src/upscale/`)
+#### Upscaling layer (`viduce-engine/src/upscale/`)
 - **`Model` (abstract)**: `RunModel(ModelIo) -> StatusOr<ModelIo>`. `ModelIo` is a normalized float vector layout `(channel, height, width)` in `[0, 1]`.
 - **`ModelImpl`**: wraps `litert::CompiledModel` (CPU). Hardcoded to 240×240 input. Returns outputs clamped to `[0, 1]`.
 - **`Upscaler`** (C++): takes a `Model*`.
@@ -155,7 +155,7 @@ upscaler_cc         -> frame, util_cc, absl
 frame               -> avutil, absl::statusor
 ```
 
-External C++ libs (via apt): `libavformat`, `libavcodec`, `libavutil`, `libswscale`. Note: `engine/deps/ffmpeg.cmake` defines an in-tree FFmpeg build but is not included by the deps CMakeLists.txt — system FFmpeg is used instead.
+External C++ libs (via apt): `libavformat`, `libavcodec`, `libavutil`, `libswscale`. Note: `viduce-engine/deps/ffmpeg.cmake` defines an in-tree FFmpeg build but is not included by the deps CMakeLists.txt — system FFmpeg is used instead.
 
 ---
 
@@ -178,7 +178,7 @@ This directory bridges the gap between research (PyTorch) and production (LiteRT
 The C++ engine exposes a C-compatible API (`extern "C"`) in `engine_api.h`. Rust consumes this API in `cmd/src/engine.rs` (or planned integration) using `libc` and `#[link(name = "engine_api")]`.
 
 ### Linking & Runtime
-The Rust build script (`cmd/build.rs`) specifies the search path for the engine's shared library. At runtime, `LD_LIBRARY_PATH` must include `engine/build/lib" (or the location of `libengine_api.so`) for the dynamic linker to find the engine.
+The Rust build script (`cmd/build.rs`) specifies the search path for the engine's shared library. At runtime, `LD_LIBRARY_PATH` must include `viduce-engine/build/lib" (or the location of `libengine_api.so`) for the dynamic linker to find the engine.
 
 ### FFmpeg Usage
 FFmpeg is primarily used via the `FfmpegCommand` builder and `FfmpegWrapper` in the `ffmpeg` crate, which executes shell commands. Direct library bindings (`libav*`) are used within the C++ engine for frame-level access.
@@ -236,7 +236,7 @@ Inference models are currently traced with fixed input shapes (e.g., 240x240). I
 
 ## Key Caveats
 
-- **`EnhanceVideo` not wired to Rust**: the `EngineRunner` calls the deprecated `DecodeVideo` (which returns `Unimplemented`). The only working path for `EnhanceVideo` is the C++ `demo` binary (`engine/src/demo.cc`).
+- **`EnhanceVideo` not wired to Rust**: the `EngineRunner` calls the deprecated `DecodeVideo` (which returns `Unimplemented`). The only working path for `EnhanceVideo` is the C++ `demo` binary (`viduce-engine/src/demo.cc`).
 - **`ffmpeg_wrapper.rs` path prefixing**: `FfmpegWrapper` prepends `assets/input/`/`assets/output/` — user-supplied paths must be relative to those directories.
 - **RealEsrganUpscaler FPS**: output is hardcoded to 30 FPS regardless of input.
 - **Model input shape**: `ModelImpl` is hardcoded to 240×240. Frames of other sizes will not work correctly.
