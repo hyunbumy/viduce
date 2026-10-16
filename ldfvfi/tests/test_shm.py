@@ -1,50 +1,18 @@
 import multiprocessing.shared_memory as sm
 import unittest
 import torch
-from ldfvfi.server.shm import HEADER_SIZE, ShmHeader, ShmReader, ShmWriter
-
-
-class TestShmHeader(unittest.TestCase):
-
-    def test_pack_and_unpack(self):
-        header = ShmHeader(
-            seq_id=42,
-            width=1920,
-            height=1080,
-            num_frames=60,
-            channels=3,
-            pixel_format=0,
-        )
-        packed = header.pack()
-        self.assertEqual(len(packed), HEADER_SIZE)
-
-        unpacked = ShmHeader.unpack(packed)
-        self.assertEqual(unpacked.seq_id, 42)
-        self.assertEqual(unpacked.width, 1920)
-        self.assertEqual(unpacked.height, 1080)
-        self.assertEqual(unpacked.num_frames, 60)
-        self.assertEqual(unpacked.channels, 3)
-        self.assertEqual(unpacked.pixel_format, 0)
-        self.assertEqual(unpacked.data_offset, HEADER_SIZE)
-
-    def test_invalid_magic_raises(self):
-        bad_buffer = bytearray(HEADER_SIZE)
-        bad_buffer[:4] = b"NOPE"
-        with self.assertRaises(ValueError) as ctx:
-            ShmHeader.unpack(bytes(bad_buffer))
-        self.assertIn("Invalid SHM header magic", str(ctx.exception))
-
-    def test_short_buffer_raises(self):
-        with self.assertRaises(ValueError):
-            ShmHeader.unpack(b"too_short")
+from ldfvfi.server.shm import ShmReader, ShmWriter
 
 
 class TestShmReaderWriter(unittest.TestCase):
 
     def setUp(self):
         self.shm_name = "test_viduce_shm_unit"
-        # 64-byte header + (5 frames * 64 height * 64 width * 3 channels)
-        self.buffer_size = HEADER_SIZE + (5 * 64 * 64 * 3)
+        self.width = 64
+        self.height = 64
+        self.channels = 3
+        # 5 frames * 64 height * 64 width * 3 channels (no header)
+        self.buffer_size = 5 * self.height * self.width * self.channels
         self.raw_shm = sm.SharedMemory(name=self.shm_name, create=True, size=self.buffer_size)
 
     def tearDown(self):
@@ -63,26 +31,44 @@ class TestShmReaderWriter(unittest.TestCase):
         input_tensor = torch.randint(0, 256, (5, 3, 64, 64), dtype=torch.uint8)
 
         # Write via ShmWriter
-        writer = ShmWriter(self.shm_name)
-        written_header = writer.write_tensor(seq_id=7, tensor=input_tensor)
+        writer = ShmWriter(self.shm_name, width=self.width, height=self.height, channels=self.channels)
+        num_written = writer.write_tensor(tensor=input_tensor)
         writer.close()
-
-        self.assertEqual(written_header.seq_id, 7)
-        self.assertEqual(written_header.num_frames, 5)
-        self.assertEqual(written_header.channels, 3)
-        self.assertEqual(written_header.height, 64)
-        self.assertEqual(written_header.width, 64)
+        self.assertEqual(num_written, 5)
 
         # Read via ShmReader
-        reader = ShmReader(self.shm_name)
-        read_header, output_tensor = reader.read_tensor()
+        reader = ShmReader(self.shm_name, width=self.width, height=self.height, channels=self.channels)
+        output_tensor = reader.read_tensor(num_frames=5)
 
-        self.assertEqual(read_header.seq_id, 7)
         self.assertEqual(output_tensor.shape, (5, 3, 64, 64))
         self.assertTrue(torch.equal(input_tensor, output_tensor))
 
         # Explicitly release buffer view before closing reader
         del output_tensor
+        reader.close()
+
+    def test_invalid_dimensions_raises(self):
+        with self.assertRaises(ValueError):
+            ShmReader(self.shm_name, width=0, height=64)
+        with self.assertRaises(ValueError):
+            ShmReader(self.shm_name, width=64, height=0)
+        with self.assertRaises(ValueError):
+            ShmReader(self.shm_name, width=64, height=64, channels=2)
+
+    def test_buffer_overflow_raises(self):
+        writer = ShmWriter(self.shm_name, width=self.width, height=self.height, channels=self.channels)
+        # Attempt to write 10 frames into a 5-frame buffer
+        too_big = torch.randint(0, 256, (10, 3, 64, 64), dtype=torch.uint8)
+        with self.assertRaises(ValueError):
+            writer.write_tensor(too_big)
+        writer.close()
+
+    def test_read_zero_or_negative_frames_raises(self):
+        reader = ShmReader(self.shm_name, width=self.width, height=self.height, channels=self.channels)
+        with self.assertRaises(ValueError):
+            reader.read_tensor(num_frames=0)
+        with self.assertRaises(ValueError):
+            reader.read_tensor(num_frames=-1)
         reader.close()
 
 

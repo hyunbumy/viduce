@@ -1,4 +1,3 @@
-import multiprocessing.shared_memory as sm
 import os
 import signal
 import socket
@@ -10,15 +9,14 @@ import grpc
 import torch
 
 from ldfvfi.proto import (
-    ChunkType,
     CreateSessionRequest,
     DestroySessionRequest,
     InterpolateChunkRequest,
-    ShmSegmentDescriptor,
+    MediaMetadata,
     VfiParameters,
 )
 from ldfvfi.proto.service_pb2_grpc import LdfVfiServiceStub
-from ldfvfi.server.shm import HEADER_SIZE, ShmReader, ShmWriter
+from ldfvfi.server.shm import ShmReader, ShmWriter
 
 
 def find_free_port() -> int:
@@ -59,54 +57,42 @@ class TestServerCLI(unittest.TestCase):
 
         stub = LdfVfiServiceStub(channel)
 
-        in_shm_name = f"cli_test_in_{port}"
-        out_shm_name = f"cli_test_out_{port}"
-        shm_in = sm.SharedMemory(name=in_shm_name, create=True, size=HEADER_SIZE + (15 * 32 * 32 * 3))
-        shm_out = sm.SharedMemory(name=out_shm_name, create=True, size=HEADER_SIZE + (60 * 32 * 32 * 3))
-
         try:
-            # 1. CreateSession
+            # 1. CreateSession (Server generates session_id and allocates SHM segments)
             resp = stub.CreateSession(
                 CreateSessionRequest(
-                    session_id="cli-sess",
+                    media_metadata=MediaMetadata(width=32, height=32, channels=3),
                     params=VfiParameters(sampling_steps=2, temporal_scale_factor=4),
-                    input_shm=ShmSegmentDescriptor(shm_name=in_shm_name),
-                    output_shm=ShmSegmentDescriptor(shm_name=out_shm_name),
                 ),
                 timeout=5.0,
             )
-            self.assertTrue(resp.success)
+            session_id = resp.session_id
+            self.assertTrue(bool(session_id))
 
             # 2. Stage frame and interpolate
-            writer = ShmWriter(in_shm_name)
-            writer.write_tensor(seq_id=0, tensor=torch.randint(0, 256, (15, 3, 32, 32), dtype=torch.uint8))
+            in_shm_name = f"/viduce_{session_id}_in"
+            writer = ShmWriter(in_shm_name, width=32, height=32, channels=3)
+            writer.write_tensor(tensor=torch.randint(0, 256, (15, 3, 32, 32), dtype=torch.uint8))
             writer.close()
 
             chunk_resp = stub.InterpolateChunk(
                 InterpolateChunkRequest(
-                    session_id="cli-sess",
+                    session_id=session_id,
                     chunk_index=0,
-                    chunk_type=ChunkType.CHUNK_FIRST,
                     num_input_frames=15,
-                    input_width=32,
-                    input_height=32,
                     is_last_chunk=False,
                 ),
                 timeout=5.0,
             )
-            self.assertTrue(chunk_resp.success)
+            self.assertEqual(chunk_resp.chunk_index, 0)
             self.assertGreater(chunk_resp.num_output_frames, 0)
 
             # 3. DestroySession
-            dest_resp = stub.DestroySession(DestroySessionRequest(session_id="cli-sess"), timeout=5.0)
-            self.assertTrue(dest_resp.success)
+            dest_resp = stub.DestroySession(DestroySessionRequest(session_id=session_id), timeout=5.0)
+            self.assertIsNotNone(dest_resp)
 
         finally:
             channel.close()
-            shm_in.close()
-            shm_in.unlink()
-            shm_out.close()
-            shm_out.unlink()
 
             # Terminate daemon via SIGTERM and verify clean exit
             proc.send_signal(signal.SIGTERM)
