@@ -19,7 +19,7 @@ RUN apt update && apt install -y \
 
 # Python dependencies
 # Setup uv
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 ### Development image
 FROM base AS develop

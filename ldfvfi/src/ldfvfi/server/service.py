@@ -1,6 +1,7 @@
 import logging
 import threading
 from typing import Optional
+import uuid
 import grpc
 import torch
 
@@ -44,41 +45,51 @@ class LdfVfiService(LdfVfiServiceServicer):
     def CreateSession(
         self, request: CreateSessionRequest, context: grpc.ServicerContext
     ) -> CreateSessionResponse:
-        session_id = request.session_id
-        if not session_id:
-            return CreateSessionResponse(success=False, error_message="session_id must not be empty")
-        if not request.input_shm.shm_name or not request.output_shm.shm_name:
-            return CreateSessionResponse(
-                success=False,
-                error_message="input_shm and output_shm names must not be empty",
+        if not request.HasField("media_metadata"):
+            context.abort(
+                grpc.StatusCode.INVALID_ARGUMENT,
+                "media_metadata must be provided in CreateSessionRequest",
+            )
+        metadata = request.media_metadata
+        if metadata.width <= 0 or metadata.height <= 0:
+            context.abort(
+                grpc.StatusCode.INVALID_ARGUMENT,
+                f"width ({metadata.width}) and height ({metadata.height}) must be positive",
+            )
+        channels = metadata.channels or 3
+        if channels not in (1, 3, 4):
+            context.abort(
+                grpc.StatusCode.INVALID_ARGUMENT,
+                f"channels ({channels}) must be 1, 3, or 4",
             )
 
         with self._lock:
-            # 1. Preempt existing session if active
             if self._active_session is not None:
                 logger.info(
-                    f"Preempting previous session '{self._active_session.session_id}' "
-                    f"with new session '{session_id}'"
+                    f"Preempting previous session '{self._active_session.session_id}'"
                 )
                 self.reset()
 
-            # 2. Initialize new session
+            session_id = uuid.uuid4().hex[:12]
             try:
                 self._active_session = VfiSession(
                     session_id=session_id,
                     params=request.params,
-                    input_shm_name=request.input_shm.shm_name,
-                    output_shm_name=request.output_shm.shm_name,
+                    media_metadata=metadata,
                     model=self.model_holder.model,
                     device=self.model_holder.device,
                     dtype=self.model_holder.dtype,
                 )
                 logger.info(f"Session '{session_id}' created successfully")
-                return CreateSessionResponse(success=True)
+                return CreateSessionResponse(session_id=session_id)
+            except ValueError as e:
+                logger.warning(f"Invalid session arguments for '{session_id}': {e}")
+                self.reset()
+                context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(e))
             except Exception as e:
                 logger.error(f"Failed to create session '{session_id}': {e}")
                 self.reset()
-                return CreateSessionResponse(success=False, error_message=f"Failed to create session: {e}")
+                context.abort(grpc.StatusCode.INTERNAL, f"Failed to create session: {e}")
 
     def InterpolateChunk(
         self, request: InterpolateChunkRequest, context: grpc.ServicerContext
@@ -86,20 +97,21 @@ class LdfVfiService(LdfVfiServiceServicer):
         session_id = request.session_id
         with self._lock:
             if self._active_session is None or self._active_session.session_id != session_id:
-                return InterpolateChunkResponse(
-                    success=False,
-                    error_message=f"Session '{session_id}' not found",
-                    chunk_index=request.chunk_index,
+                context.abort(grpc.StatusCode.NOT_FOUND, f"Session '{session_id}' not found")
+
+            if request.num_input_frames <= 0:
+                context.abort(
+                    grpc.StatusCode.INVALID_ARGUMENT,
+                    f"num_input_frames must be positive, got {request.num_input_frames}",
                 )
 
             try:
                 num_output_frames, inference_time_ms = self._active_session.interpolate_chunk(
-                    chunk_type=request.chunk_type,
                     chunk_index=request.chunk_index,
+                    num_input_frames=request.num_input_frames,
                     is_last=request.is_last_chunk,
                 )
                 return InterpolateChunkResponse(
-                    success=True,
                     chunk_index=request.chunk_index,
                     num_output_frames=num_output_frames,
                     inference_time_ms=inference_time_ms,
@@ -107,31 +119,19 @@ class LdfVfiService(LdfVfiServiceServicer):
             except torch.cuda.OutOfMemoryError as e:
                 logger.error(f"CUDA OOM in session '{session_id}': {e}")
                 self.model_holder.purge_cache()
-                return InterpolateChunkResponse(
-                    success=False,
-                    error_message="CUDA out of memory during chunk interpolation",
-                    chunk_index=request.chunk_index,
-                )
+                context.abort(grpc.StatusCode.RESOURCE_EXHAUSTED, f"CUDA OOM: {e}")
             except Exception as e:
                 logger.error(f"Error during chunk interpolation in session '{session_id}': {e}")
-                return InterpolateChunkResponse(
-                    success=False,
-                    error_message=str(e),
-                    chunk_index=request.chunk_index,
-                )
+                context.abort(grpc.StatusCode.INTERNAL, f"Inference failed: {e}")
 
     def DestroySession(
         self, request: DestroySessionRequest, context: grpc.ServicerContext
     ) -> DestroySessionResponse:
         session_id = request.session_id
         with self._lock:
-            if self._active_session is not None and self._active_session.session_id == session_id:
-                self.reset()
-                logger.info(f"Session '{session_id}' destroyed")
-                return DestroySessionResponse(success=True)
-            else:
-                logger.warning(f"Session '{session_id}' not found for destruction")
-                return DestroySessionResponse(
-                    success=False,
-                    error_message=f"Session '{session_id}' not found",
-                )
+            if self._active_session is None or self._active_session.session_id != session_id:
+                context.abort(grpc.StatusCode.NOT_FOUND, f"Session '{session_id}' not found")
+
+            self.reset()
+            logger.info(f"Session '{session_id}' destroyed successfully")
+            return DestroySessionResponse()

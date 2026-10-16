@@ -6,7 +6,7 @@ import torch.nn.functional as F
 
 from ldfvfi.models.precond import Precond, SpatialTiledConditionEncoder3D, SpatialTiledEncoder3D
 from ldfvfi.ops.temporal import upsample_temporal
-from ldfvfi.proto import ChunkType, VfiParameters
+from ldfvfi.proto import VfiParameters
 
 
 def vae_decode(vae, xt: torch.Tensor, **kwargs) -> torch.Tensor:
@@ -53,11 +53,11 @@ class SkipConcatSession:
 
         # Diffusion schedule
         self.num_steps = params.sampling_steps if params.sampling_steps > 0 else 10
-        self.t_shift = params.t_shift if params.t_shift > 0 else 1.0
-        self.t_cond = params.t_cond if params.t_cond > 0 else 0.1
+        self.t_shift = getattr(params, "t_shift", 1.0) or 1.0
+        self.t_cond = getattr(params, "t_cond", 0.1) or 0.1
         self.temporal_sf = params.temporal_scale_factor if params.temporal_scale_factor > 0 else 4
-        self.train_num_frames = params.train_num_frames if params.train_num_frames > 0 else 60
-        self.tile_min_t = params.tile_min_t if params.tile_min_t > 0 else 20
+        self.train_num_frames = getattr(params, "train_num_frames", 60) or 60
+        self.tile_min_t = getattr(params, "tile_min_t", 20) or 20
         self.nT_cond = 1
 
         self.ts = compute_schedule(self.num_steps, self.t_shift)
@@ -69,32 +69,32 @@ class SkipConcatSession:
 
     def interpolate_chunk(
         self,
-        chunk_type: ChunkType,
+        chunk_index: int,
         input_tensor: torch.Tensor,
         is_last: bool = False,
     ) -> torch.Tensor:
         """Interpolates intermediate motion frames for a chunk staged in memory.
 
         Args:
-            chunk_type: Chunk role tag (CHUNK_FIRST, CHUNK_SKIP, CHUNK_CONCAT, CHUNK_LAST, CHUNK_STANDALONE).
+            chunk_index: Monotonically increasing sequence index.
             input_tensor: Input frames of shape [T_in, 3, H, W] uint8.
             is_last: Whether this is the final video chunk.
 
         Returns:
             Generated frames of shape [T_out, 3, H, W] uint8.
         """
-        if chunk_type == ChunkType.CHUNK_FIRST:
-            return self._interpolate_first(input_tensor)
-        elif chunk_type == ChunkType.CHUNK_SKIP:
-            return self._interpolate_skip(input_tensor)
-        elif chunk_type == ChunkType.CHUNK_CONCAT:
-            return self._interpolate_concat(input_tensor)
-        elif chunk_type == ChunkType.CHUNK_LAST:
-            return self._interpolate_last(input_tensor)
-        elif chunk_type == ChunkType.CHUNK_STANDALONE:
-            return self._interpolate_standalone(input_tensor)
+        if chunk_index == 0:
+            if is_last:
+                return self._interpolate_standalone(input_tensor)
+            else:
+                return self._interpolate_first(input_tensor)
         else:
-            raise ValueError(f"Unknown ChunkType: {chunk_type}")
+            if is_last:
+                return self._interpolate_last(input_tensor)
+            elif self.x0_skip is None:
+                return self._interpolate_skip(input_tensor)
+            else:
+                return self._interpolate_concat(input_tensor)
 
     def _prepare_lq_and_msk(
         self,
