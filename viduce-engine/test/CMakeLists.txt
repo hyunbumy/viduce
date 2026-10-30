@@ -47,4 +47,6 @@ target_link_libraries(engine_session_test
 target_link_libraries(engine_session_test PRIVATE engine_session)
 gtest_discover_tests(engine_session_test)
 
+add_subdirectory(interpolate)
 add_subdirectory(upscale)
+

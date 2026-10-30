@@ -1,5 +1,6 @@
 # TODO: Figure out how to encapsulate compilation units
 
+add_subdirectory(interpolate)
 add_subdirectory(upscale)
 
 # C++ protobuf/gRPC code for EngineService, generated into the build tree from
@@ -151,6 +152,7 @@ target_link_libraries(engine_api
     frame_writer
     model_impl
     proto_grpc
+    shm_buffer
     upscaler
 )
 
