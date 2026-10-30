@@ -27,6 +27,19 @@ FROM base AS develop
 # Install dev rust deps
 RUN rustup component add rust-docs rustfmt clippy
 
+# Pre-warm C++ (_deps) and Rust (target) caches for fast ephemeral agent runs.
+# In human mode (`docker-compose.dev.yml`), `/usr/src/viduce` is bind-mounted
+# over this directory, so host files take precedence.
+WORKDIR /usr/src/viduce
+COPY . .
+RUN cmake -S viduce-engine -B viduce-engine/build \
+        -DCMAKE_BUILD_TYPE=Debug \
+        -DCMAKE_C_COMPILER=clang \
+        -DCMAKE_CXX_COMPILER=clang++ && \
+    cmake --build viduce-engine/build -j"$(nproc)" && \
+    cp viduce-engine/build/lib/libengine_api.so /lib/ && \
+    cargo test --no-run
+
 ### Temporary stages for build type
 FROM base AS build-debug
 ENV ENGINE_BUILD="Debug"
