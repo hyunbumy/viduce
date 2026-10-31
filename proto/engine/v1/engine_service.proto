@@ -4,9 +4,14 @@ package viduce.engine;
 
 // Control-plane API exposed by the viduce engine.
 service EngineService {
+  // For now, assume that there is only one active session at a time.
   rpc CreateSession(CreateSessionRequest) returns (CreateSessionResponse);
 }
 
-message CreateSessionRequest {}
+// Next ID: 2
+message CreateSessionRequest {
+  // Socket path for the Engine session
+  optional string socket_path = 1;
+}
 
 message CreateSessionResponse {}

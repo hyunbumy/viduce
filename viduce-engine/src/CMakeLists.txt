@@ -35,7 +35,8 @@ target_link_libraries(engine_service_proto PUBLIC protobuf::libprotobuf gRPC::gr
 
 add_library(engine_service_impl STATIC engine_service_impl.cc)
 target_include_directories(engine_service_impl PUBLIC ../include)
-target_link_libraries(engine_service_impl PUBLIC engine_service_proto)
+target_link_libraries(engine_service_impl PUBLIC engine_service_proto engine_session)
+target_link_libraries(engine_service_impl PRIVATE absl::status)
 
 add_library(engine_session STATIC engine_session.cpp)
 target_include_directories(engine_session PUBLIC ../include)
