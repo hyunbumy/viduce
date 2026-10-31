@@ -3,11 +3,9 @@ name: Build
 on:
   push:
     branches: [ "main" ]
+  # Run for every pull request, including stacked ones that target other
+  # branches.
   pull_request:
-    branches: [ "main" ]
-
-env:
-  CARGO_TERM_COLOR: always
 
 jobs:
   ci:
@@ -17,9 +15,6 @@ jobs:
       uses: actions/checkout@v4
       with:
         lfs: true
-    # Need explicit lfs pull since the lfs option in checkout does not checkout
-    # the actual files.
-    - run: git lfs pull
 
     - name: Setup Docker Buildx
       uses: docker/setup-buildx-action@v3
@@ -27,9 +22,11 @@ jobs:
     - name: Build
       uses: docker/build-push-action@v6
       with:
-        # Need context to use the pulled lfs files from the previous step
+        # Need context to use the checked-out tree, including the LFS files
         context: .
         outputs: type=cacheonly
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
         build-args: |
-          BUILD_TYPE:debug
+          BUILD_TYPE=debug
         target: build
