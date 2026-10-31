@@ -37,6 +37,11 @@ add_library(engine_service_impl STATIC engine_service_impl.cc)
 target_include_directories(engine_service_impl PUBLIC ../include)
 target_link_libraries(engine_service_impl PUBLIC engine_service_proto)
 
+add_library(engine_session STATIC engine_session.cpp)
+target_include_directories(engine_session PUBLIC ../include)
+target_link_libraries(engine_session PUBLIC absl::status Boost::asio)
+target_link_libraries(engine_session PRIVATE absl::str_format spdlog::spdlog)
+
 add_executable(engine_server engine_server.cc)
 target_link_libraries(engine_server
     PRIVATE

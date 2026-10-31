@@ -25,3 +25,4 @@ FetchContent_MakeAvailable(abseil)
 
 include(litert.cmake)
 include(grpc.cmake)
+include(boost.cmake)
