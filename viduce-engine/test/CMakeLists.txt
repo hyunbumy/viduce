@@ -36,4 +36,15 @@ target_link_libraries(engine_service_impl_test PRIVATE gmock gtest_main)
 target_link_libraries(engine_service_impl_test PRIVATE engine_service_impl)
 gtest_discover_tests(engine_service_impl_test)
 
+add_executable(engine_session_test engine_session_test.cc)
+target_link_libraries(engine_session_test
+    PRIVATE
+    absl::status
+    absl::status_matchers
+    gmock
+    gtest_main
+)
+target_link_libraries(engine_session_test PRIVATE engine_session)
+gtest_discover_tests(engine_session_test)
+
 add_subdirectory(upscale)
