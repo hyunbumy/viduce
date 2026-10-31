@@ -150,6 +150,7 @@ target_link_libraries(engine_api
     PRIVATE
     frame_reader
     frame_writer
+    ldf_vfi_client
     model_impl
     proto_grpc
     shm_buffer
