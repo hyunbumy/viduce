@@ -1,4 +1,7 @@
 **/target
+viduce-engine/build
+**/.venv
+.git
 *.code-workspace
 Dockerfile
 
