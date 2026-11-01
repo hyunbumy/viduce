@@ -26,3 +26,17 @@ target_link_libraries(shm_frame_packer
     avutil
     util
 )
+
+add_library(ldf_vfi_client STATIC ldf_vfi_client.cc)
+target_include_directories(ldf_vfi_client PUBLIC ../../include)
+target_link_libraries(ldf_vfi_client
+    PUBLIC
+    absl::status
+    absl::statusor
+    absl::strings
+    frame
+    gRPC::grpc++
+    proto_grpc
+    shm_buffer
+    shm_frame_packer
+)
