@@ -1,6 +1,8 @@
 use libc::c_int;
 use std::time::Duration;
 
+mod engine_proto;
+
 // IMPORTANT: Make sure to set the LD_LIBRARY_PATH correctly to locate the
 // dynamic lib.
 #[link(name = "engine_api")]
@@ -26,6 +28,17 @@ fn process(frame: moq_mux::container::Frame) -> anyhow::Result<()> {
 async fn main() -> anyhow::Result<()> {
     moq_native::Log::new(tracing::Level::DEBUG).init()?;
 
+    // Connect to Engine client
+    let mut engine_client =
+        engine_proto::engine_service_client::EngineServiceClient::connect("http://localhost:50051")
+            .await?;
+    let request = tonic::Request::new(engine_proto::CreateSessionRequest {
+        socket_path: Some("/tmp/engine.sock".to_string()),
+    });
+    let response = engine_client.create_session(request).await?;
+    tracing::info!("engine session created: {:?}", response);
+
+    // Set up MoQ
     let origin_producer = moq_net::Origin::random().produce();
     let client = moq_native::ClientConfig::default().init()?;
 
