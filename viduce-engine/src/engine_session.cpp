@@ -3,11 +3,12 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-#include <cstring>
+#include <memory>
 #include <string_view>
 #include <utility>
 
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "boost/asio.hpp"
 #include "spdlog/spdlog.h"
@@ -18,17 +19,44 @@ EngineSession::EngineSession(std::string_view socket_path,
                              FrameCallback on_frame)
     : socket_path_(std::string(socket_path)), on_frame_(std::move(on_frame)) {}
 
+absl::StatusOr<std::unique_ptr<EngineSession>> EngineSession::Create(
+    std::string_view socket_path, FrameCallback on_frame) {
+  // The constructor is private, so std::make_unique cannot be used.
+  std::unique_ptr<EngineSession> session(
+      new EngineSession(socket_path, std::move(on_frame)));
+  if (absl::Status status = session->Listen(); !status.ok()) {
+    return status;
+  }
+
+  // Queue the first step before starting the thread, so run() has work and
+  // does not return immediately.
+  session->DoAccept();
+  EngineSession* raw = session.get();
+  session->io_thread_ = std::thread([raw]() { raw->ctx_.run(); });
+
+  return session;
+}
+
 EngineSession::~EngineSession() {
-  // The socket thread only exists once Start() has bound the socket.
-  if (!socket_thread_) {
+  // The IO thread does not exist if Create() failed to listen.
+  if (!io_thread_.joinable()) {
     return;
   }
-  socket_thread_->join();
-  // Remove the socket file Start() created.
+
+  // Close on the IO thread so it never races with a running handler. Pending
+  // operations then complete with operation_aborted, ending the chain. If the
+  // chain already ended, the IO thread has exited and this is never run.
+  boost::asio::post(ctx_, [this]() {
+    boost::system::error_code ignored;
+    acceptor_.close(ignored);
+    socket_.close(ignored);
+  });
+  io_thread_.join();
+  // Remove the socket file Listen() created.
   ::unlink(socket_path_.c_str());
 }
 
-absl::Status EngineSession::Start() {
+absl::Status EngineSession::Listen() {
   if (socket_path_.empty()) {
     return absl::Status(absl::StatusCode::kInvalidArgument,
                         "Socket path must not be empty");
@@ -42,7 +70,8 @@ absl::Status EngineSession::Start() {
                         socket_path_, kMaxSocketPathLen));
   }
 
-  // Bind before spawning the thread so clients can connect once Start returns.
+  // Bind before Create() spawns the thread so clients can connect once it
+  // returns.
   ::unlink(socket_path_.c_str());  // Remove previous binding.
   boost::asio::local::stream_protocol::endpoint ep(socket_path_);
   boost::system::error_code ec;
@@ -58,53 +87,54 @@ absl::Status EngineSession::Start() {
         ec.value(),
         absl::StrFormat("Failed to listen on socket %s", socket_path_));
   }
-
-  socket_thread_ = std::make_unique<std::thread>([this]() {
-    boost::asio::local::stream_protocol::socket socket(ctx_);
-    acceptor_.accept(socket);
-
-    // Process socket data
-    boost::system::error_code ec;
-    while (!ec) {
-      ec = ReadFrame(socket);
-    }
-
-    // Handle eof or error.
-    spdlog::info("Socket read loop ended with error code {}", ec.message());
-
-    return;
-  });
-
   return absl::OkStatus();
 }
 
-boost::system::error_code EngineSession::ReadFrame(
-    boost::asio::local::stream_protocol::socket& socket) {
-  boost::system::error_code ec;
-  // Read FrameHeader
-  boost::asio::read(socket, boost::asio::buffer(header_buf_), ec);
-  if (ec) {
-    return ec;
-  }
+void EngineSession::DoAccept() {
+  acceptor_.async_accept(socket_, [this](boost::system::error_code ec) {
+    if (ec) {
+      Finish(ec);
+      return;
+    }
+    DoReadHeader();
+  });
+}
 
-  FrameHeader header;
-  std::memcpy(&header, header_buf_.data(), sizeof(FrameHeader));
+void EngineSession::DoReadHeader() {
+  boost::asio::async_read(
+      socket_, boost::asio::buffer(&header_, sizeof(header_)),
+      [this](boost::system::error_code ec, size_t /* bytes_read */) {
+        if (ec) {
+          Finish(ec);
+          return;
+        }
+        payload_.resize(header_.payload_len);
+        DoReadPayload();
+      });
+}
 
-  // Read the payload based on the header
-  std::vector<uint8_t> payload(header.payload_len);
-  size_t bytes_read =
-      boost::asio::read(socket, boost::asio::buffer(payload), ec);
-  if (ec) {
-    return ec;
-  }
+void EngineSession::DoReadPayload() {
+  boost::asio::async_read(
+      socket_, boost::asio::buffer(payload_),
+      [this](boost::system::error_code ec, size_t bytes_read) {
+        if (ec) {
+          Finish(ec);
+          return;
+        }
+        spdlog::info("Received payload of size {}, bytes read {}",
+                     payload_.size(), bytes_read);
+        if (on_frame_) {
+          on_frame_(header_, payload_);
+        }
+        DoReadHeader();
+      });
+}
 
-  spdlog::info("Received payload of size {}, bytes read {}", payload.size(),
-               bytes_read);
-  if (on_frame_) {
-    on_frame_(header, payload);
-  }
-
-  return {};
+void EngineSession::Finish(const boost::system::error_code& ec) {
+  // Handle eof, abort by the destructor, or error.
+  spdlog::info("Socket read loop ended with error code {}", ec.message());
+  boost::system::error_code ignored;
+  socket_.close(ignored);
 }
 
 }  // namespace viduce::engine

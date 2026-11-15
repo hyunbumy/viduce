@@ -2,11 +2,13 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "absl/status/status.h"
 #include "absl/status/status_matchers.h"
+#include "absl/status/statusor.h"
 #include "boost/asio.hpp"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -40,19 +42,33 @@ void AppendFrame(std::vector<uint8_t>& bytes, uint32_t flags,
   bytes.insert(bytes.end(), payload.begin(), payload.end());
 }
 
+// Ends the client's side of the stream, then waits until the session closes its
+// side. The session only does that once it has read everything up to the end
+// of the stream, so all sent frames are processed when this returns.
+void DisconnectAndWaitForSession(
+    boost::asio::local::stream_protocol::socket& client) {
+  client.shutdown(boost::asio::socket_base::shutdown_send);
+  uint8_t unused;
+  boost::system::error_code ec;
+  boost::asio::read(client, boost::asio::buffer(&unused, 1), ec);
+  EXPECT_EQ(ec, boost::asio::error::eof);
+  client.close();
+}
+
 // Starts a session, writes `bytes` to it from a client, then disconnects.
 // Returns the frames the session received.
 std::vector<ReceivedFrame> ExerciseSession(const std::vector<uint8_t>& bytes) {
   std::string socket_path = TestSocketPath();
   std::vector<ReceivedFrame> frames;
   {
-    EngineSession session(socket_path,
-                          [&frames](const FrameHeader& header,
-                                    const std::vector<uint8_t>& payload) {
-                            frames.push_back({header, payload});
-                          });
-    if (absl::Status status = session.Start(); !status.ok()) {
-      ADD_FAILURE() << "Start failed: " << status;
+    absl::StatusOr<std::unique_ptr<EngineSession>> session =
+        EngineSession::Create(socket_path,
+                              [&frames](const FrameHeader& header,
+                                        const std::vector<uint8_t>& payload) {
+                                frames.push_back({header, payload});
+                              });
+    if (!session.ok()) {
+      ADD_FAILURE() << "Create failed: " << session.status();
       return frames;
     }
 
@@ -60,8 +76,8 @@ std::vector<ReceivedFrame> ExerciseSession(const std::vector<uint8_t>& bytes) {
     boost::asio::local::stream_protocol::socket client(ctx);
     client.connect(boost::asio::local::stream_protocol::endpoint(socket_path));
     boost::asio::write(client, boost::asio::buffer(bytes));
-    client.close();
-  }  // Destroying the session joins its socket thread.
+    DisconnectAndWaitForSession(client);
+  }
   return frames;
 }
 
@@ -143,22 +159,46 @@ TEST(EngineSessionTest, RemovesSocketFileWhenDestroyed) {
   EXPECT_FALSE(std::filesystem::exists(TestSocketPath()));
 }
 
-TEST(EngineSessionTest, StartRejectsEmptySocketPath) {
-  EngineSession session("");
+TEST(EngineSessionTest, DestructionReturnsWhenNoClientConnected) {
+  std::string socket_path = TestSocketPath();
+  absl::StatusOr<std::unique_ptr<EngineSession>> session =
+      EngineSession::Create(socket_path);
+  ASSERT_TRUE(session.ok()) << session.status();
 
-  EXPECT_THAT(session.Start(), StatusIs(absl::StatusCode::kInvalidArgument));
+  session->reset();
+
+  EXPECT_FALSE(std::filesystem::exists(socket_path));
 }
 
-TEST(EngineSessionTest, StartRejectsTooLongSocketPath) {
-  EngineSession session(::testing::TempDir() + std::string(200, 'a'));
+TEST(EngineSessionTest, DestructionReturnsWhenClientIsConnectedButIdle) {
+  std::string socket_path = TestSocketPath();
+  absl::StatusOr<std::unique_ptr<EngineSession>> session =
+      EngineSession::Create(socket_path);
+  ASSERT_TRUE(session.ok()) << session.status();
+  boost::asio::io_context ctx;
+  boost::asio::local::stream_protocol::socket client(ctx);
+  client.connect(boost::asio::local::stream_protocol::endpoint(socket_path));
 
-  EXPECT_THAT(session.Start(), StatusIs(absl::StatusCode::kInvalidArgument));
+  session->reset();
+
+  EXPECT_FALSE(std::filesystem::exists(socket_path));
 }
 
-TEST(EngineSessionTest, StartFailsWhenDirectoryDoesNotExist) {
-  EngineSession session(::testing::TempDir() + "missing_dir/session.sock");
+TEST(EngineSessionTest, CreateRejectsEmptySocketPath) {
+  EXPECT_THAT(EngineSession::Create(""),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+}
 
-  EXPECT_THAT(session.Start(), StatusIs(absl::StatusCode::kNotFound));
+TEST(EngineSessionTest, CreateRejectsTooLongSocketPath) {
+  EXPECT_THAT(
+      EngineSession::Create(::testing::TempDir() + std::string(200, 'a')),
+      StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+TEST(EngineSessionTest, CreateFailsWhenDirectoryDoesNotExist) {
+  EXPECT_THAT(
+      EngineSession::Create(::testing::TempDir() + "missing_dir/session.sock"),
+      StatusIs(absl::StatusCode::kNotFound));
 }
 
 }  // namespace

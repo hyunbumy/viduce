@@ -1,5 +1,6 @@
 #include "engine/engine_service_impl.h"
 
+#include <filesystem>
 #include <string>
 
 #include "boost/asio.hpp"
@@ -98,6 +99,31 @@ TEST(EngineServiceImplTest, CreateSessionReusesSocketPathOfExistingSession) {
 
   ASSERT_TRUE(status.ok()) << status.error_message();
   EXPECT_FALSE(ConnectAndDisconnect(request.socket_path()));
+}
+
+TEST(EngineServiceImplTest, CreateSessionReplacesSessionWithoutClient) {
+  EngineServiceImpl service;
+  CreateSessionRequest first;
+  first.set_socket_path(TestSocketPath("_first"));
+  ASSERT_TRUE(CreateSession(service, first).ok());
+
+  CreateSessionRequest second;
+  second.set_socket_path(TestSocketPath("_second"));
+  grpc::Status status = CreateSession(service, second);
+
+  ASSERT_TRUE(status.ok()) << status.error_message();
+  EXPECT_FALSE(ConnectAndDisconnect(second.socket_path()));
+}
+
+TEST(EngineServiceImplTest, DestroysSessionWithoutClient) {
+  CreateSessionRequest request;
+  request.set_socket_path(TestSocketPath());
+  {
+    EngineServiceImpl service;
+    ASSERT_TRUE(CreateSession(service, request).ok());
+  }
+
+  EXPECT_FALSE(std::filesystem::exists(request.socket_path()));
 }
 
 TEST(EngineServiceImplTest, CreateSessionReturnsStartError) {
