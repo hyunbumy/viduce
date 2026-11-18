@@ -1,7 +1,5 @@
 #pragma once
 
-#include <array>
-#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -11,6 +9,7 @@
 #include <vector>
 
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "boost/asio.hpp"
 
 namespace viduce::engine {
@@ -42,39 +41,56 @@ struct FrameHeader {
 // EngineSession is responsible for the lifecycle of UDS for ingest and
 // triggering the engine to start processing.
 //
-// The client is expected to close its connection before a started session is
-// destroyed; destruction waits for the socket thread to finish.
+// A session is running for as long as it exists: Create() binds the socket and
+// starts accepting, and destruction stops it. Socket I/O runs asynchronously on
+// a dedicated IO thread, so destruction returns promptly whether or not a
+// client has connected, and whether or not the client is still sending.
 class EngineSession {
  public:
-  // Invoked on the socket thread for each complete frame received.
+  // Invoked on the IO thread for each complete frame received.
   using FrameCallback = std::function<void(const FrameHeader& header,
                                            const std::vector<uint8_t>& payload)>;
 
-  explicit EngineSession(std::string_view socket_path,
-                         FrameCallback on_frame = nullptr);
-  // Joins the socket thread, which ends once the client closes its connection,
-  // then removes the socket file if Start() created one.
-  ~EngineSession();
-
-  // Starts the session.
-  // Binds the socket at `socket_path`, then runs the socket loop in a separate
-  // thread and returns immediately. Clients may connect once this returns.
+  // Binds the socket at `socket_path`, then accepts and reads from a client on
+  // the IO thread. Clients may connect once this returns.
   // Returns InvalidArgument if `socket_path` is empty or too long for a Unix
   // socket, or the errno-mapped error if the socket cannot be bound.
-  absl::Status Start();
+  static absl::StatusOr<std::unique_ptr<EngineSession>> Create(
+      std::string_view socket_path, FrameCallback on_frame = nullptr);
+
+  // Aborts any pending accept or read, joins the IO thread, then removes the
+  // socket file. Unread frames are dropped. Must not run on the IO thread, i.e.
+  // the session must not be destroyed from the frame callback.
+  ~EngineSession();
+
+  EngineSession(const EngineSession&) = delete;
+  EngineSession& operator=(const EngineSession&) = delete;
 
  private:
-  boost::system::error_code ReadFrame(
-      boost::asio::local::stream_protocol::socket& socket);
+  EngineSession(std::string_view socket_path, FrameCallback on_frame);
+
+  // Validates the socket path, then binds and listens on it.
+  absl::Status Listen();
+
+  void DoAccept();
+  void DoReadHeader();
+  void DoReadPayload();
+  void Finish(const boost::system::error_code& ec);
 
   std::string socket_path_;
+  FrameCallback on_frame_;
+
+  // Must be declared before the acceptor and socket, which are bound to it and
+  // must be destroyed before it.
   boost::asio::io_context ctx_;
   boost::asio::local::stream_protocol::acceptor acceptor_{ctx_};
+  boost::asio::local::stream_protocol::socket socket_{ctx_};
+  std::thread io_thread_;
 
-  std::unique_ptr<std::thread> socket_thread_;
-  std::array<uint8_t, sizeof(FrameHeader)> header_buf_;
-
-  FrameCallback on_frame_;
+  // Pre-allocated FrameHeader instance reused for reading from the socket
+  FrameHeader header_;
+  // Pre-allocated payload buffer for the read frame
+  std::vector<uint8_t> payload_;
 };
 
 }  // namespace viduce::engine

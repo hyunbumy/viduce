@@ -34,17 +34,20 @@ gtest_discover_tests(frame_writer_test)
 add_executable(engine_service_impl_test engine_service_impl_test.cc)
 target_link_libraries(engine_service_impl_test PRIVATE gmock gtest_main)
 target_link_libraries(engine_service_impl_test PRIVATE engine_service_impl)
-gtest_discover_tests(engine_service_impl_test)
+# A session that fails to stop hangs rather than fails; the timeout turns that
+# into a test failure.
+gtest_discover_tests(engine_service_impl_test PROPERTIES TIMEOUT 10)
 
 add_executable(engine_session_test engine_session_test.cc)
 target_link_libraries(engine_session_test
     PRIVATE
     absl::status
     absl::status_matchers
+    absl::statusor
     gmock
     gtest_main
 )
 target_link_libraries(engine_session_test PRIVATE engine_session)
-gtest_discover_tests(engine_session_test)
+gtest_discover_tests(engine_session_test PROPERTIES TIMEOUT 10)
 
 add_subdirectory(upscale)

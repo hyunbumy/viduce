@@ -36,11 +36,11 @@ target_link_libraries(engine_service_proto PUBLIC protobuf::libprotobuf gRPC::gr
 add_library(engine_service_impl STATIC engine_service_impl.cc)
 target_include_directories(engine_service_impl PUBLIC ../include)
 target_link_libraries(engine_service_impl PUBLIC engine_service_proto engine_session)
-target_link_libraries(engine_service_impl PRIVATE absl::status)
+target_link_libraries(engine_service_impl PRIVATE absl::status absl::statusor)
 
 add_library(engine_session STATIC engine_session.cpp)
 target_include_directories(engine_session PUBLIC ../include)
-target_link_libraries(engine_session PUBLIC absl::status Boost::asio)
+target_link_libraries(engine_session PUBLIC absl::status absl::statusor Boost::asio)
 target_link_libraries(engine_session PRIVATE absl::str_format spdlog::spdlog)
 
 add_executable(engine_server engine_server.cc)

@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "engine/v1/engine_service.pb.h"
 #include "grpcpp/grpcpp.h"
 
@@ -35,11 +36,12 @@ grpc::Status EngineServiceImpl::CreateSession(
   // remove the new session's file if both use the same path.
   engine_session_.reset();
 
-  auto session = std::make_unique<EngineSession>(request->socket_path());
-  if (absl::Status status = session->Start(); !status.ok()) {
-    return ToGrpcStatus(status);
+  absl::StatusOr<std::unique_ptr<EngineSession>> session =
+      EngineSession::Create(request->socket_path());
+  if (!session.ok()) {
+    return ToGrpcStatus(session.status());
   }
-  engine_session_ = std::move(session);
+  engine_session_ = *std::move(session);
   return grpc::Status::OK;
 }
 
