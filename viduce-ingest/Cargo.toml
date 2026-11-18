@@ -11,6 +11,12 @@ libc = "0.2.0"
 moq-mux = "0.5.4"
 moq-native = "0.17.0"
 moq-net = "0.1.10"
+prost = "0.14.4"
 tokio = "1.52.3"
+tonic = "0.14.9"
+tonic-prost = "0.14.9"
 tracing = "0.1.44"
 url = "2.5.8"
+
+[build-dependencies]
+tonic-prost-build = "0.14.9"
