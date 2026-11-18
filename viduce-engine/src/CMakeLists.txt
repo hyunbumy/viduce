@@ -153,6 +153,7 @@ target_link_libraries(engine_api
     model_impl
     proto_grpc
     shm_buffer
+    shm_frame_packer
     upscaler
 )
 
